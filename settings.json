@@ -1,0 +1,7 @@
+{
+  "openaiApiKey": "",
+  "nvidiaApiKey": "",
+  "twilioAccountSid": "",
+  "twilioAuthToken": "",
+  "twilioWhatsappNumber": ""
+}

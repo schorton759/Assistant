@@ -1,0 +1,21 @@
+{
+  "name": "whatsapp-ai-assistant",
+  "version": "1.0.0",
+  "description": "WhatsApp AI Assistant with Dropbox integration",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "tunnel": "lt --port 3000"
+  },
+  "dependencies": {
+    "axios": "^0.21.1",
+    "body-parser": "^1.19.0",
+    "dotenv": "^10.0.0",
+    "dropbox": "^10.34.0",
+    "express": "^4.17.1",
+    "twilio": "^3.63.0"
+  },
+  "devDependencies": {
+    "localtunnel": "^2.0.2"
+  }
+}

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp AI Assistant Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-50 font-inter">
+    <div class="min-h-screen">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex">
+                        <div class="flex-shrink-0 flex items-center">
+                            <h1 class="text-2xl font-bold text-indigo-600">AI Assistant</h1>
+                        </div>
+                        <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                            <button class="tab-button border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium" data-tab="dashboard">Dashboard</button>
+                            <button class="tab-button border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium" data-tab="alerts">Alerts</button>
+                            <button class="tab-button border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium" data-tab="chat">Chat</button>
+                            <button class="tab-button border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium" data-tab="profile">Profile</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <div id="connection-status" class="flex items-center">
+                            <span class="h-2 w-2 rounded-full bg-green-400 mr-2"></span>
+                            <span class="text-sm text-gray-500">Connected</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <!-- Dashboard Tab -->
+            <div id="dashboard-tab" class="tab-content">
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    <!-- Service Status Card -->
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="p-5">
+                            <h3 class="text-lg font-medium text-gray-900">Service Status</h3>
+                            <div class="mt-4 space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <span>WhatsApp Connection</span>
+                                    <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Active</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span>AI Service</span>
+                                    <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Online</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span>Database</span>
+                                    <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Connected</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions Card -->
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="p-5">
+                            <h3 class="text-lg font-medium text-gray-900">Quick Actions</h3>
+                            <div class="mt-4 space-y-2">
+                                <button class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" onclick="document.querySelector('[data-tab=\'alerts\']').click()">
+                                    Create New Alert
+                                </button>
+                                <button class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" onclick="document.querySelector('[data-tab=\'chat\']').click()">
+                                    Start Chat
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity Card -->
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="p-5">
+                            <h3 class="text-lg font-medium text-gray-900">Recent Activity</h3>
+                            <div class="mt-4 space-y-2" id="recent-activity">
+                                <!-- Activity items will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerts Tab -->
+            <div id="alerts-tab" class="tab-content hidden">
+                <div class="bg-white shadow sm:rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <!-- Create Alert Form -->
+                        <div class="mb-8">
+                            <h3 class="text-lg font-medium text-gray-900">Create New Alert</h3>
+                            <form id="alert-form" class="mt-5 space-y-4">
+                                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <label for="service" class="block text-sm font-medium text-gray-700">Service</label>
+                                        <select id="service" name="service" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                            <option value="news_summary">News Summary</option>
+                                            <option value="weather_forecast">Weather Forecast</option>
+                                            <option value="stock_update">Stock Update</option>
+                                            <option value="custom_reminder">Custom Reminder</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="time" class="block text-sm font-medium text-gray-700">Time</label>
+                                        <input type="time" id="time" name="time" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="frequency" class="block text-sm font-medium text-gray-700">Frequency</label>
+                                    <select id="frequency" name="frequency" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                        <option value="daily">Daily</option>
+                                        <option value="weekly">Weekly</option>
+                                        <option value="one-off">One-off</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="message" class="block text-sm font-medium text-gray-700">Custom Message (optional)</label>
+                                    <textarea id="message" name="message" rows="3" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
+                                </div>
+                                <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                    Create Alert
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Alert Lists -->
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                            <!-- Pending Alerts -->
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900">Pending Alerts</h3>
+                                <ul id="pending-alerts-list" class="mt-4 space-y-4"></ul>
+                            </div>
+                            <!-- Completed Alerts -->
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900">Completed Alerts</h3>
+                                <ul id="completed-alerts-list" class="mt-4 space-y-4"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Tab -->
+            <div id="chat-tab" class="tab-content hidden">
+                <div class="bg-white shadow sm:rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <div class="flex flex-col h-[600px]">
+                            <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+                            <div class="border-t p-4">
+                                <form id="chat-form" class="flex space-x-4">
+                                    <input type="text" id="chat-input" class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Type your message...">
+                                    <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                        Send
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Tab -->
+            <div id="profile-tab" class="tab-content hidden">
+                <div class="bg-white shadow sm:rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg font-medium text-gray-900">Your Profile</h3>
+                        <form id="profile-form" class="mt-5 space-y-4">
+                            <div>
+                                <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
+                                <input type="text" id="name" name="name" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            </div>
+                            <div>
+                                <label for="phone" class="block text-sm font-medium text-gray-700">Phone Number</label>
+                                <input type="tel" id="phone" name="phone" value="+14415362022" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            </div>
+                            <div>
+                                <label for="timezone" class="block text-sm font-medium text-gray-700">Timezone</label>
+                                <select id="timezone" name="timezone" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                    <!-- Timezones will be populated via JavaScript -->
+                                </select>
+                            </div>
+                            <div>
+                                <label for="language" class="block text-sm font-medium text-gray-700">Preferred Language</label>
+                                <select id="language" name="language" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                    <option value="en">English</option>
+                                    <option value="es">Spanish</option>
+                                    <option value="fr">French</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" id="notifications" name="notifications" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                <label for="notifications" class="ml-2 block text-sm text-gray-700">Enable Notifications</label>
+                            </div>
+                            <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Save Changes
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Initialize variables and get DOM elements
+        const alertForm = document.getElementById('alert-form');
+        const pendingAlertsList = document.getElementById('pending-alerts-list');
+        const completedAlertsList = document.getElementById('completed-alerts-list');
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const chatMessages = document.getElementById('chat-messages');
+        const recentActivity = document.getElementById('recent-activity');
+        const connectionStatus = document.getElementById('connection-status');
+
+        // Function to update connection status
+        function updateConnectionStatus(isConnected) {
+            const statusDot = connectionStatus.querySelector('span:first-child');
+            const statusText = connectionStatus.querySelector('span:last-child');
+            
+            if (isConnected) {
+                statusDot.className = 'h-2 w-2 rounded-full bg-green-400 mr-2';
+                statusText.textContent = 'Connected';
+            } else {
+                statusDot.className = 'h-2 w-2 rounded-full bg-red-400 mr-2';
+                statusText.textContent = 'Disconnected';
+            }
+        }
+
+        // Function to add activity to recent activity list
+        function addRecentActivity(activity) {
+            const activityElement = document.createElement('div');
+            activityElement.className = 'flex items-center justify-between text-sm';
+            activityElement.innerHTML = `
+                <span class="text-gray-600">${activity}</span>
+                <span class="text-gray-400 text-xs">${new Date().toLocaleTimeString()}</span>
+            `;
+            recentActivity.insertBefore(activityElement, recentActivity.firstChild);
+            if (recentActivity.children.length > 5) {
+                recentActivity.removeChild(recentActivity.lastChild);
+            }
+        }
+
+        // Alert form submission
+        alertForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(alertForm);
+            const alertData = Object.fromEntries(formData.entries());
+
+            try {
+                const response = await axios.post('/api/alerts', alertData);
+                console.log('Alert created:', response.data);
+                addRecentActivity(`Created new ${alertData.service} alert`);
+                alertForm.reset();
+                await fetchAndDisplayAlerts();
+            } catch (error) {
+                console.error('Error creating alert:', error);
+                alert('Failed to create alert. Please try again.');
+            }
+        });
+
+        // Chat form submission
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = chatInput.value.trim();
+            if (message) {
+                try {
+                    appendMessage('You', message);
+                    chatInput.value = '';
+                    addRecentActivity('Sent a message');
+                    const response = await axios.post('/api/chat', { message });
+                    appendMessage('AI', response.data.content);
+                    addRecentActivity('Received AI response');
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    alert('Failed to send message. Please try again.');
+                }
+            }
+        });
+
+        // Function to append chat messages
+        function appendMessage(sender, content) {
+            const messageElement = document.createElement('div');
+            messageElement.className = sender === 'You' 
+                ? 'flex flex-col items-end mb-4'
+                : 'flex flex-col items-start mb-4';
+            
+            messageElement.innerHTML = `
+                <div class="max-w-3/4 ${sender === 'You' ? 'bg-indigo-100' : 'bg-gray-100'} rounded-lg px-4 py-2">
+                    <p class="text-sm font-semibold mb-1">${sender}</p>
+                    <p class="text-sm">${content}</p>
+                    <p class="text-xs text-gray-500 mt-1">${new Date().toLocaleTimeString()}</p>
+                </div>
+            `;
+            
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Function to fetch and display alerts
+        async function fetchAndDisplayAlerts() {
+            await Promise.all([
+                fetchPendingAlerts(),
+                fetchCompletedAlerts()
+            ]);
+        }
+
+        // Function to fetch pending alerts
+        async function fetchPendingAlerts() {
+            try {
+                const response = await axios.get('/api/alerts/pending');
+                console.log('Raw pending alerts response:', response);
+                const alerts = response.data.alerts || [];
+                
+                pendingAlertsList.innerHTML = '';
+                
+                if (alerts.length === 0) {
+                    pendingAlertsList.innerHTML = '<li class="bg-white rounded-lg p-4 shadow">No pending alerts</li>';
+                } else {
+                    alerts.forEach(alert => {
+                        const li = createAlertListItem(alert, true);
+                        pendingAlertsList.appendChild(li);
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching pending alerts:', error);
+                pendingAlertsList.innerHTML = `
+                    <li class="bg-white rounded-lg p-4 shadow">
+                        <p class="text-red-500">Failed to load pending alerts</p>
+                        <p class="text-sm text-gray-500">${error.message}</p>
+                    </li>
+                `;
+            }
+        }
+
+        // Function to fetch completed alerts
+        async function fetchCompletedAlerts() {
+            try {
+                const response = await axios.get('/api/alerts/completed');
+                console.log('Raw completed alerts response:', response);
+                const alerts = response.data.alerts || [];
+                
+                completedAlertsList.innerHTML = '';
+                
+                if (alerts.length === 0) {
+                    completedAlertsList.innerHTML = '<li class="bg-white rounded-lg p-4 shadow">No completed alerts</li>';
+                } else {
+                    alerts.forEach(alert => {
+                        const li = createAlertListItem(alert, false);
+                        completedAlertsList.appendChild(li);
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching completed alerts:', error);
+                completedAlertsList.innerHTML = `
+                    <li class="bg-white rounded-lg p-4 shadow">
+                        <p class="text-red-500">Failed to load completed alerts</p>
+                        <p class="text-sm text-gray-500">${error.message}</p>
+                    </li>
+                `;
+            }
+        }
+
+        // Function to create alert list items
+        function createAlertListItem(alert, isPending) {
+            const li = document.createElement('li');
+            li.className = 'bg-white rounded-lg p-4 shadow mb-4 hover:shadow-md transition-shadow duration-200';
+            
+            li.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="font-semibold text-lg">${alert.service || 'N/A'}</p>
+                        <p class="text-sm text-gray-600">Time: ${alert.time || 'N/A'}</p>
+                        <p class="text-sm text-gray-600">Frequency: ${alert.frequency || 'N/A'}</p>
+                        ${alert.message ? `<p class="text-sm text-gray-600">Message: ${alert.message}</p>` : ''}
+                    </div>
+                    ${isPending ? `
+                        <button class="delete-alert px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors duration-200" data-id="${alert._id}">
+                            Delete
+                        </button>
+                    ` : ''}
+                </div>
+                ${!isPending ? `
+                    <div class="mt-3 pt-3 border-t">
+                        <p class="text-sm text-gray-600">Triggered: ${new Date(alert.lastTriggeredAt).toLocaleString()}</p>
+                        <div class="mt-2 p-2 bg-gray-50 rounded">
+                            <p class="text-sm">${alert.lastTriggeredContent || 'No content available'}</p>
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+
+            if (isPending) {
+                const deleteButton = li.querySelector('.delete-alert');
+                deleteButton.addEventListener('click', async () => {
+                    try {
+                        await axios.delete(`/api/alerts/${alert._id}`);
+                        addRecentActivity(`Deleted ${alert.service} alert`);
+                        await fetchAndDisplayAlerts();
+                    } catch (error) {
+                        console.error('Error deleting alert:', error);
+                        alert('Failed to delete alert. Please try again.');
+                    }
+                });
+            }
+
+            return li;
+        }
+
+        // Tab switching logic
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const tabName = button.getAttribute('data-tab');
+                tabContents.forEach(content => content.classList.add('hidden'));
+                document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+                tabButtons.forEach(btn => {
+                    btn.classList.remove('bg-indigo-100', 'text-indigo-700', 'border-indigo-500');
+                    btn.classList.add('border-transparent', 'text-gray-500', 'hover:border-gray-300', 'hover:text-gray-700');
+                });
+                button.classList.remove('border-transparent', 'text-gray-500', 'hover:border-gray-300', 'hover:text-gray-700');
+                button.classList.add('bg-indigo-100', 'text-indigo-700', 'border-indigo-500');
+            });
+        });
+
+        // Initial setup
+        document.querySelector('[data-tab="dashboard"]').click();
+        fetchAndDisplayAlerts();
+        updateConnectionStatus(true);
+
+        // Refresh alerts every 60 seconds
+        setInterval(fetchAndDisplayAlerts, 60000);
+
+        // Check connection status periodically
+        setInterval(async () => {
+            try {
+                await axios.get('/api/test');
+                updateConnectionStatus(true);
+            } catch (error) {
+                updateConnectionStatus(false);
+            }
+        }, 30000);
+
+        // Function to populate timezone dropdown
+        function populateTimezones() {
+            const timezoneSelect = document.getElementById('timezone');
+            const timezones = moment.tz.names();
+            
+            timezones.forEach(timezone => {
+                const option = document.createElement('option');
+                option.value = timezone;
+                option.textContent = timezone;
+                timezoneSelect.appendChild(option);
+            });
+
+            // Set default timezone
+            const userTimezone = moment.tz.guess();
+            timezoneSelect.value = userTimezone;
+        }
+
+        // Function to load profile data
+        async function loadProfileData() {
+            try {
+                const response = await axios.get('/api/profile');
+                const profile = response.data;
+
+                if (profile) {
+                    document.getElementById('name').value = profile.name || '';
+                    document.getElementById('phone').value = profile.phoneNumber || '+14415362022';
+                    document.getElementById('timezone').value = profile.preferences?.timezone || moment.tz.guess();
+                    document.getElementById('language').value = profile.preferences?.language || 'en';
+                    document.getElementById('notifications').checked = profile.preferences?.notifications ?? true;
+                }
+            } catch (error) {
+                console.error('Error loading profile:', error);
+                alert('Failed to load profile data');
+            }
+        }
+
+        // Handle profile form submission
+        document.getElementById('profile-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('name').value,
+                phoneNumber: document.getElementById('phone').value,
+                preferences: {
+                    timezone: document.getElementById('timezone').value,
+                    language: document.getElementById('language').value,
+                    notifications: document.getElementById('notifications').checked
+                }
+            };
+
+            try {
+                const response = await axios.post('/api/profile', formData);
+                addRecentActivity('Profile updated');
+                alert('Profile updated successfully!');
+            } catch (error) {
+                console.error('Error updating profile:', error);
+                alert('Failed to update profile. Please try again.');
+            }
+        });
+
+        // Initialize profile
+        document.addEventListener('DOMContentLoaded', () => {
+            populateTimezones();
+            loadProfileData();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+authtoken: 2nI9otbLOQAlXmrOSu7X56con5W_59hmznibtTwJjhqK9pGbh
+tunnels:
+  app:
+    addr: 3000
+    proto: http
+    subdomain: 2d5e-207-228-148-206
+    oauth:
+      provider: google
+      client_id: 726899875975-4569j13vmpjpoo3jss3jmb5mthip2qn4.apps.googleusercontent.com
+      client_secret: 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
