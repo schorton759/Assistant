@@ -21,7 +21,7 @@
     "lucide-react": "^0.344.0",
     "moment-timezone": "^0.5.46",
     "mongodb": "^6.9.0",
-    "mongoose": "^6.0.0",
+    "mongoose": "^6.13.5",
     "multer": "^1.4.5-lts.1",
     "natural": "^8.0.1",
     "node-cron": "^3.0.3",
