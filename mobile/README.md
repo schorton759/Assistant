@@ -12,7 +12,15 @@ Ask in plain English (“cheapest JFK to London next month”). Five agents coll
 4. **RouteAdvisor** — best overall route  
 5. **Concierge** — final travel-agent recommendation  
 
-## Run on iPhone
+## Fastest path: mobile Safari (PWA)
+
+```bash
+npm run start:flights
+```
+
+Open `http://YOUR_HOST:3000/` (or `/skyagent/`) in iPhone Safari, then **Share → Add to Home Screen**.
+
+## Expo Go (native shell)
 
 1. Start the API from the repo root:
 
