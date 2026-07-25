@@ -21,6 +21,7 @@ const axios = require('axios');
 const twilio = require('twilio');
 const { Dropbox } = require('dropbox');
 const { initPinecone } = require('./server/vectorStore');
+const flightRoutes = require('./server/routes/flightRoutes');
 
 const logger = winston.createLogger({
   level: 'info',
@@ -54,8 +55,13 @@ process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-// MongoDB connection with retry
+// MongoDB connection with retry (optional — SkyAgent flights work without it)
 async function connectToMongoDB() {
+  if (process.env.SKIP_MONGODB === 'true' || !process.env.MONGODB_URI) {
+    logger.warn('MongoDB skipped (SKIP_MONGODB or missing MONGODB_URI). Flight API still available.');
+    return;
+  }
+
   const maxRetries = 5;
   let retries = 0;
 
@@ -72,8 +78,8 @@ async function connectToMongoDB() {
       retries++;
       logger.error(`MongoDB connection attempt ${retries} failed:`, error);
       if (retries === maxRetries) {
-        logger.error('Max retries reached. Exiting...');
-        process.exit(1);
+        logger.error('Max MongoDB retries reached — continuing without database.');
+        return;
       }
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, 5000));
@@ -277,6 +283,59 @@ app.post('/api/presentation', async (req, res) => {
   }
 });
 
+// SkyAgent — AI multi-agent flight search
+app.use('/api/flights', flightRoutes);
+
+app.get('/api/test', (req, res) => {
+    console.log('Received test request');
+    res.json({ message: 'Backend is working' });
+});
+
+// Profile routes
+app.get('/api/profile', async (req, res) => {
+    try {
+        // For now, we'll just get the default user
+        const user = await User.findOne({ phoneNumber: '+14415362022' });
+        if (!user) {
+            // Create default user if it doesn't exist
+            const defaultUser = new User({
+                phoneNumber: '+14415362022',
+                preferences: {
+                    timezone: 'UTC',
+                    language: 'en',
+                    notifications: true
+                }
+            });
+            await defaultUser.save();
+            return res.json(defaultUser);
+        }
+        res.json(user);
+    } catch (error) {
+        logger.error('Error fetching profile:', error);
+        res.status(500).json({ error: 'Failed to fetch profile' });
+    }
+});
+
+app.post('/api/profile', async (req, res) => {
+    try {
+        const { name, phoneNumber, preferences } = req.body;
+        const user = await User.findOneAndUpdate(
+            { phoneNumber },
+            { 
+                $set: { 
+                    name,
+                    preferences
+                }
+            },
+            { new: true, upsert: true }
+        );
+        res.json(user);
+    } catch (error) {
+        logger.error('Error updating profile:', error);
+        res.status(500).json({ error: 'Failed to update profile' });
+    }
+});
+
 // The "catchall" handler: for any request that doesn't
 // match one above, send back React's index.html file.
 app.get('*', (req, res) => {
@@ -284,7 +343,11 @@ app.get('*', (req, res) => {
 });
 
 // Start the alert scheduler
-scheduleAlerts();
+try {
+  scheduleAlerts();
+} catch (error) {
+  logger.warn('Alert scheduler skipped:', error.message);
+}
 
 // Add this function to check all API connections
 async function checkAPIConnections() {
@@ -305,27 +368,32 @@ async function checkAPIConnections() {
     logger.error('✗ OpenAI API connection failed:', error.message);
   }
 
-  // Check NVIDIA API
-  try {
-    const response = await axios.post(
-      'https://integrate.api.nvidia.com/v1/chat/completions',
-      {
-        model: "nvidia/llama-3.1-nemotron-70b-instruct",
-        messages: [{ role: "user", content: "test" }],
-        max_tokens: 5
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.NVIDIA_API_KEY}`,
-          'Content-Type': 'application/json'
+  // Check NVIDIA API (free NIM models)
+  if (!process.env.NVIDIA_API_KEY) {
+    logger.warn('✗ NVIDIA API key missing — SkyAgent will use local ranking fallbacks');
+  } else {
+    try {
+      const response = await axios.post(
+        'https://integrate.api.nvidia.com/v1/chat/completions',
+        {
+          model: process.env.NVIDIA_MODEL || 'meta/llama-3.1-8b-instruct',
+          messages: [{ role: 'user', content: 'test' }],
+          max_tokens: 5
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.NVIDIA_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000
         }
+      );
+      if (response.data) {
+        logger.info('✓ NVIDIA API connection successful');
       }
-    );
-    if (response.data) {
-      logger.info('✓ NVIDIA API connection successful');
+    } catch (error) {
+      logger.error('✗ NVIDIA API connection failed:', error.message);
     }
-  } catch (error) {
-    logger.error('✗ NVIDIA API connection failed:', error.message);
   }
 
   // Check Twilio API
@@ -377,88 +445,38 @@ async function checkAPIConnections() {
   logger.info('API connection checks completed');
 }
 
-// Add this to your server startup
 app.listen(port, async () => {
   logger.info('Server starting...');
-  
-  // Connect to MongoDB first
-  try {
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
-    logger.info('Connected to MongoDB');
-  } catch (error) {
-    logger.error('MongoDB connection error:', error);
+
+  if (process.env.SKIP_MONGODB !== 'true' && process.env.MONGODB_URI) {
+    try {
+      if (mongoose.connection.readyState !== 1) {
+        await mongoose.connect(process.env.MONGODB_URI, {
+          useNewUrlParser: true,
+          useUnifiedTopology: true
+        });
+      }
+      logger.info('Connected to MongoDB');
+    } catch (error) {
+      logger.error('MongoDB connection error:', error);
+    }
   }
 
-  // Check all API connections
   await checkAPIConnections();
 
-  // Start the alert scheduler
-  scheduleAlerts();
+  try {
+    scheduleAlerts();
+  } catch (error) {
+    logger.warn('Alert scheduler skipped:', error.message);
+  }
 
   logger.info(`Server running on port ${port}`);
+  logger.info('SkyAgent flights API: /api/flights/search and /api/flights/ask');
 });
 
-// Function to log to a file
 async function logToFile(filename, message) {
   const logPath = path.join(__dirname, 'logs', filename);
   await fs.appendFile(logPath, `${new Date().toISOString()} - ${message}\n`);
 }
 
-app.get('/api/test', (req, res) => {
-    console.log('Received test request');
-    res.json({ message: 'Backend is working' });
-});
-
-// Add this near the top of the file
 console.log('Server starting with updated code...');
-
-// Profile routes
-app.get('/api/profile', async (req, res) => {
-    try {
-        // For now, we'll just get the default user
-        const user = await User.findOne({ phoneNumber: '+14415362022' });
-        if (!user) {
-            // Create default user if it doesn't exist
-            const defaultUser = new User({
-                phoneNumber: '+14415362022',
-                preferences: {
-                    timezone: 'UTC',
-                    language: 'en',
-                    notifications: true
-                }
-            });
-            await defaultUser.save();
-            return res.json(defaultUser);
-        }
-        res.json(user);
-    } catch (error) {
-        logger.error('Error fetching profile:', error);
-        res.status(500).json({ error: 'Failed to fetch profile' });
-    }
-});
-
-app.post('/api/profile', async (req, res) => {
-    try {
-        const { name, phoneNumber, preferences } = req.body;
-        const user = await User.findOneAndUpdate(
-            { phoneNumber },
-            { 
-                $set: { 
-                    name,
-                    preferences
-                }
-            },
-            { new: true, upsert: true }
-        );
-        res.json(user);
-    } catch (error) {
-        logger.error('Error updating profile:', error);
-        res.status(500).json({ error: 'Failed to update profile' });
-    }
-});
-
-// Remove or comment out this line:
-// const testRoutes = require('./routes/testRoutes');

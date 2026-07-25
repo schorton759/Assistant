@@ -1,8 +1,16 @@
-# WhatsApp AI Assistant
+# WhatsApp AI Assistant + SkyAgent
 
 ## Overview
 
 The WhatsApp AI Assistant is a sophisticated, AI-powered chatbot that integrates with WhatsApp to provide a wide range of services and information. It leverages OpenAI's GPT models, various APIs, and custom tools to offer an intelligent and versatile assistant accessible through WhatsApp.
+
+### New: SkyAgent (iPhone flight desk)
+
+**SkyAgent** is a multi-agent flight finder for iPhone powered by free **NVIDIA NIM** models. Ask in plain English and get cheapest, shortest, and best routes from a team of AI travel agents.
+
+- Docs: [SKYAGENT.md](./SKYAGENT.md)
+- Mobile app: [`mobile/`](./mobile/)
+- API: `npm run start:flights` → `POST /api/flights/search`
 
 ## Features
 

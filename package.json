@@ -3,10 +3,23 @@
   "version": "1.0.0",
   "scripts": {
     "start": "node server.js",
+    "start:flights": "NODE_ENV=development SKIP_MONGODB=true node server/flightServer.js",
     "dev": "NODE_ENV=development nodemon server.js",
+    "dev:flights": "NODE_ENV=development SKIP_MONGODB=true nodemon server/flightServer.js",
     "test": "TEST_MODE=true jest",
+    "test:flights": "TEST_MODE=true jest server/agents/__tests__/flightAgents.test.js",
     "build": "tsc && vite build",
     "preview": "vite preview"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/server/package.json",
+      "<rootDir>/mobile/"
+    ]
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^3.0.3",
