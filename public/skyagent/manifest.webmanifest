@@ -1,0 +1,22 @@
+{
+  "name": "SkyAgent",
+  "short_name": "SkyAgent",
+  "description": "AI travel desk — cheapest, shortest, best flights",
+  "start_url": "/skyagent/",
+  "display": "standalone",
+  "background_color": "#071525",
+  "theme_color": "#071525",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/skyagent/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/skyagent/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

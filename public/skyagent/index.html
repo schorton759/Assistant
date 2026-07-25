@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#071525" />
+  <meta name="description" content="SkyAgent — AI travel desk. Cheapest, shortest, best flights." />
+  <title>SkyAgent</title>
+  <link rel="manifest" href="/skyagent/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/skyagent/icon-180.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #071525;
+      --deep: #0b3a4a;
+      --lagoon: #1a6b6b;
+      --mist: #e8f1f5;
+      --sunrise: #f4b460;
+      --soft: rgba(232, 241, 245, 0.78);
+      --faint: rgba(232, 241, 245, 0.48);
+      --line: rgba(232, 241, 245, 0.2);
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: "DM Sans", sans-serif;
+      color: var(--mist);
+      background: var(--navy);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    .sky {
+      min-height: 100dvh;
+      position: relative;
+      background:
+        radial-gradient(ellipse 80% 50% at 90% -10%, rgba(244, 180, 96, 0.18), transparent 55%),
+        radial-gradient(ellipse 60% 45% at -10% 90%, rgba(120, 210, 200, 0.16), transparent 50%),
+        linear-gradient(165deg, #071525 0%, #0b3a4a 48%, #1a6b6b 100%);
+    }
+
+    .wrap {
+      width: min(480px, 100%);
+      margin: 0 auto;
+      padding: calc(20px + var(--safe-top)) 22px calc(40px + var(--safe-bottom));
+    }
+
+    .hero {
+      opacity: 0;
+      transform: translateY(16px);
+      animation: rise 0.75s ease forwards;
+    }
+
+    .brand {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 700;
+      font-size: clamp(2.75rem, 12vw, 3.4rem);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      margin: 0;
+    }
+
+    .headline {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 600;
+      font-size: 1.4rem;
+      color: var(--sunrise);
+      margin: 0.55rem 0 0;
+    }
+
+    .subhead {
+      margin: 0.7rem 0 0;
+      font-size: 1rem;
+      line-height: 1.5;
+      color: var(--soft);
+      max-width: 22rem;
+    }
+
+    .ask {
+      margin-top: 1.75rem;
+      opacity: 0;
+      animation: rise 0.75s ease 0.12s forwards;
+    }
+
+    textarea, input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--line);
+      color: var(--mist);
+      font: inherit;
+      outline: none;
+      border-radius: 0;
+      -webkit-appearance: none;
+    }
+
+    textarea {
+      min-height: 5.5rem;
+      resize: none;
+      font-size: 1.1rem;
+      line-height: 1.45;
+      padding: 0.6rem 0;
+    }
+
+    textarea::placeholder, input::placeholder {
+      color: rgba(232, 241, 245, 0.4);
+    }
+
+    .codes {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 0.65rem;
+      align-items: end;
+      margin-top: 1.1rem;
+    }
+
+    .codes input {
+      text-align: center;
+      font-weight: 700;
+      font-size: 1.35rem;
+      letter-spacing: 0.2em;
+      padding: 0.55rem 0;
+      text-transform: uppercase;
+    }
+
+    .arrow {
+      font-family: "Fraunces", Georgia, serif;
+      color: var(--sunrise);
+      font-size: 1.35rem;
+      padding-bottom: 0.45rem;
+    }
+
+    .cta {
+      margin-top: 1.35rem;
+      width: 100%;
+      border: none;
+      background: var(--sunrise);
+      color: #0b1f33;
+      font-family: "DM Sans", sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      padding: 1rem 1.2rem;
+      cursor: pointer;
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+
+    .cta:disabled {
+      opacity: 0.7;
+      animation: none;
+    }
+
+    .prompts {
+      display: flex;
+      gap: 0.55rem;
+      overflow-x: auto;
+      margin-top: 1rem;
+      padding-bottom: 0.25rem;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .prompts::-webkit-scrollbar { display: none; }
+
+    .prompt {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--soft);
+      font: 500 0.8rem/1.2 "DM Sans", sans-serif;
+      padding: 0.55rem 0.75rem;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .status {
+      margin-top: 1rem;
+      min-height: 1.25rem;
+      font-size: 0.9rem;
+      color: #ffb4a8;
+    }
+
+    .results {
+      margin-top: 1.8rem;
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    .results.show {
+      animation: rise 0.45s ease forwards;
+    }
+
+    .label {
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin: 0 0 0.5rem;
+    }
+
+    .concierge-title {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.55rem;
+      line-height: 1.2;
+      margin: 0 0 0.55rem;
+    }
+
+    .concierge-body {
+      margin: 0 0 1rem;
+      color: var(--soft);
+      line-height: 1.5;
+      font-size: 0.95rem;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
+      margin: 1.25rem 0 0.4rem;
+    }
+
+    .tab {
+      border: none;
+      background: transparent;
+      color: var(--faint);
+      font: 500 0.95rem/1 "DM Sans", sans-serif;
+      padding: 0.7rem 0.2rem;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+    }
+    .tab.active {
+      color: var(--mist);
+      border-bottom-color: var(--sunrise);
+    }
+
+    .offer {
+      padding: 0.95rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .offer.featured {
+      background: rgba(244, 180, 96, 0.08);
+      margin: 0 -0.55rem;
+      padding-left: 0.55rem;
+      padding-right: 0.55rem;
+    }
+
+    .offer-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      align-items: baseline;
+    }
+
+    .route {
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    .price {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.35rem;
+      color: var(--sunrise);
+      white-space: nowrap;
+    }
+
+    .meta, .soft {
+      margin-top: 0.25rem;
+      font-size: 0.9rem;
+      color: var(--soft);
+    }
+    .soft { color: var(--faint); font-size: 0.8rem; }
+
+    .agents { margin-top: 1.4rem; }
+    .agent {
+      padding: 0.8rem 0;
+      border-bottom: 1px solid rgba(232, 241, 245, 0.12);
+    }
+    .agent strong { font-size: 0.9rem; }
+    .agent span {
+      color: var(--faint);
+      font-weight: 400;
+    }
+    .agent p {
+      margin: 0.35rem 0 0;
+      color: var(--soft);
+      font-size: 0.85rem;
+      line-height: 1.45;
+    }
+
+    .footnote {
+      margin-top: 1.2rem;
+      font-size: 0.75rem;
+      color: var(--faint);
+    }
+
+    .install {
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+      font-size: 0.8rem;
+      color: var(--faint);
+      line-height: 1.45;
+    }
+
+    @keyframes rise {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.015); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero, .ask, .results, .cta { animation: none !important; opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sky">
+    <main class="wrap">
+      <header class="hero">
+        <h1 class="brand">SkyAgent</h1>
+        <p class="headline">Your AI travel desk</p>
+        <p class="subhead">Ask in plain English. Agents hunt cheapest, shortest, and best routes.</p>
+      </header>
+
+      <section class="ask">
+        <label class="label" for="query">Ask</label>
+        <textarea id="query" placeholder="Weekend in Tokyo from SFO, keep it under pain…">Find the best flight from JFK to London next month</textarea>
+
+        <div class="codes">
+          <input id="origin" maxlength="3" value="JFK" aria-label="From airport" />
+          <div class="arrow" aria-hidden="true">→</div>
+          <input id="destination" maxlength="3" value="LHR" aria-label="To airport" />
+        </div>
+
+        <button class="cta" id="searchBtn" type="button">Ask the agents</button>
+
+        <div class="prompts" id="prompts">
+          <button class="prompt" type="button" data-q="Cheapest JFK to LHR next month" data-o="JFK" data-d="LHR">Cheapest JFK → LHR</button>
+          <button class="prompt" type="button" data-q="Fastest SFO to Tokyo" data-o="SFO" data-d="NRT">Fastest SFO → Tokyo</button>
+          <button class="prompt" type="button" data-q="Best LAX to Paris" data-o="LAX" data-d="CDG">Best LAX → Paris</button>
+        </div>
+
+        <p class="status" id="status" aria-live="polite"></p>
+      </section>
+
+      <section class="results" id="results" hidden></section>
+
+      <p class="install">
+        On iPhone: tap Share → <strong>Add to Home Screen</strong> for the full-screen app feel.
+      </p>
+    </main>
+  </div>
+
+  <script>
+    const money = (n, c = 'USD') => {
+      try {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: c, maximumFractionDigits: 0 }).format(n);
+      } catch {
+        return `$${n}`;
+      }
+    };
+
+    const els = {
+      query: document.getElementById('query'),
+      origin: document.getElementById('origin'),
+      destination: document.getElementById('destination'),
+      btn: document.getElementById('searchBtn'),
+      status: document.getElementById('status'),
+      results: document.getElementById('results'),
+    };
+
+    let state = { result: null, bucket: 'best' };
+
+    function offerHtml(offer, featured) {
+      return `
+        <article class="offer ${featured ? 'featured' : ''}">
+          <div class="offer-top">
+            <div class="route">${offer.origin} → ${offer.destination}</div>
+            <div class="price">${money(offer.price, offer.currency)}</div>
+          </div>
+          <div class="meta">${offer.durationLabel} · ${offer.stopsLabel} · ${offer.airlines.join(', ')}</div>
+          <div class="soft">Comfort ${offer.comfortScore}${offer.baggageIncluded ? ' · bags included' : ' · bags extra'}</div>
+        </article>
+      `;
+    }
+
+    function render() {
+      const data = state.result;
+      if (!data) return;
+
+      const concierge = data.agents.find((a) => a.agent === 'Concierge') || {};
+      const offers = data.buckets[state.bucket] || [];
+      const recId = data.recommendation?.id;
+
+      els.results.hidden = false;
+      els.results.classList.remove('show');
+      // restart animation
+      void els.results.offsetWidth;
+      els.results.classList.add('show');
+
+      els.results.innerHTML = `
+        <p class="label">Concierge</p>
+        <h2 class="concierge-title">${concierge.headline || 'Your AI travel desk recommends'}</h2>
+        <p class="concierge-body">${concierge.summary || ''}</p>
+        ${data.recommendation ? offerHtml(data.recommendation, true) : ''}
+
+        <div class="tabs">
+          ${['cheapest', 'shortest', 'best'].map((key) => `
+            <button class="tab ${state.bucket === key ? 'active' : ''}" data-bucket="${key}" type="button">
+              ${key[0].toUpperCase()}${key.slice(1)}
+            </button>
+          `).join('')}
+        </div>
+
+        ${offers.map((o) => offerHtml(o, o.id === recId)).join('')}
+
+        <div class="agents">
+          <p class="label">Agent desk</p>
+          ${data.agents.map((a) => `
+            <div class="agent">
+              <strong>${a.agent}<span> · ${a.model}</span></strong>
+              <p>${a.reasoning || a.summary || ''}</p>
+            </div>
+          `).join('')}
+        </div>
+
+        <p class="footnote">
+          ${data.nvidiaEnabled
+            ? 'Powered by free NVIDIA NIM models.'
+            : 'Running on local ranking. Add NVIDIA_API_KEY for live NIM agents.'}
+        </p>
+      `;
+
+      els.results.querySelectorAll('[data-bucket]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.bucket = btn.dataset.bucket;
+          render();
+        });
+      });
+    }
+
+    async function search(override) {
+      const query = override?.query ?? els.query.value.trim();
+      const origin = (override?.origin ?? els.origin.value).trim().toUpperCase();
+      const destination = (override?.destination ?? els.destination.value).trim().toUpperCase();
+
+      els.origin.value = origin;
+      els.destination.value = destination;
+      if (override?.query) els.query.value = override.query;
+
+      els.status.textContent = '';
+      els.btn.disabled = true;
+      els.btn.textContent = 'Agents working…';
+
+      try {
+        const res = await fetch('/api/flights/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, origin, destination, preference: state.bucket }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Search failed');
+
+        state.result = data;
+        if (['cheapest', 'shortest', 'best'].includes(data.brief?.preference)) {
+          state.bucket = data.brief.preference;
+        }
+        render();
+      } catch (err) {
+        els.status.textContent = err.message || 'Search failed';
+      } finally {
+        els.btn.disabled = false;
+        els.btn.textContent = 'Ask the agents';
+      }
+    }
+
+    els.btn.addEventListener('click', () => search());
+    document.getElementById('prompts').addEventListener('click', (e) => {
+      const btn = e.target.closest('.prompt');
+      if (!btn) return;
+      search({ query: btn.dataset.q, origin: btn.dataset.o, destination: btn.dataset.d });
+    });
+
+    ['origin', 'destination'].forEach((id) => {
+      els[id].addEventListener('input', () => {
+        els[id].value = els[id].value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+      });
+    });
+  </script>
+</body>
+</html>

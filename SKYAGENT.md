@@ -18,12 +18,20 @@ Flight offers come from a deterministic catalog shaped like real multi-airline i
 ## Quick start
 
 ```bash
-# API
+# API + mobile Safari web UI
 cp .env.example .env   # add NVIDIA_API_KEY when ready
 npm install
 npm run start:flights
+# open http://localhost:3000/skyagent/  (or Add to Home Screen on iPhone)
+```
 
-# iPhone app
+### Mobile Safari / PWA
+
+The web UI at `/skyagent/` is built for iPhone Safari. Tap **Share → Add to Home Screen** for a full-screen app feel.
+
+### Expo iPhone app
+
+```bash
 cd mobile && npm install
 EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:3000 npx expo start
 # open in Expo Go on iPhone
