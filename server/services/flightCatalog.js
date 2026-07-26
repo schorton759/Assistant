@@ -343,12 +343,60 @@ function buildSegment({ airline, origin, destination, departAt, durationMin, fli
   };
 }
 
+function stopsMeta(segments) {
+  if (!segments || segments.length <= 1) {
+    return { stops: 0, stopAirports: [], stopsLabel: 'Nonstop' };
+  }
+  const stopAirports = segments.slice(0, -1).map((s) => s.destination);
+  const stopsLabel =
+    stopAirports.length === 1
+      ? `1 stop in ${stopAirports[0]}`
+      : `${stopAirports.length} stops via ${stopAirports.join(', ')}`;
+  return { stops: stopAirports.length, stopAirports, stopsLabel };
+}
+
+function withLayoverMinutes(segments) {
+  return segments.map((seg, i) => {
+    if (i === 0) return { ...seg, layoverMinutes: null, layoverLabel: null };
+    const prev = segments[i - 1];
+    const layoverMinutes = Math.max(
+      0,
+      Math.round((new Date(seg.departAt) - new Date(prev.arriveAt)) / 60000)
+    );
+    return {
+      ...seg,
+      layoverMinutes,
+      layoverLabel: layoverMinutes ? formatDuration(layoverMinutes) : null,
+    };
+  });
+}
+
+const METROS = [
+  new Set(['LHR', 'LGW', 'STN']),
+  new Set(['JFK', 'EWR', 'LGA']),
+  new Set(['NRT', 'HND']),
+  new Set(['CDG', 'ORY']),
+];
+
+function sameMetro(a, b) {
+  return METROS.some((set) => set.has(a) && set.has(b));
+}
+
 /** Connection hubs that make sense for a route / marketing airline */
 function connectionHubs(origin, destination, airline) {
   const hubs = [];
   const push = (...codes) => {
     for (const c of codes) {
-      if (c && c !== origin && c !== destination && !hubs.includes(c)) hubs.push(c);
+      if (
+        c &&
+        c !== origin &&
+        c !== destination &&
+        !sameMetro(c, origin) &&
+        !sameMetro(c, destination) &&
+        !hubs.includes(c)
+      ) {
+        hubs.push(c);
+      }
     }
   };
 
@@ -582,6 +630,9 @@ function generateOffers({
           ? 3.4 + rand() * 0.5
           : 3.5 + rand() * 0.8;
 
+    const enrichedSegments = withLayoverMinutes(segments);
+    const stopInfo = stopsMeta(enrichedSegments);
+
     const offer = {
       id: `sky-${from}${to}-${seed.toString(16)}-${offers.length}`,
       origin: from,
@@ -592,12 +643,13 @@ function generateOffers({
       passengers,
       price,
       currency: 'USD',
-      stops,
-      stopsLabel: stops === 0 ? 'Nonstop' : stops === 1 ? '1 stop' : `${stops} stops`,
+      stops: stopInfo.stops,
+      stopAirports: stopInfo.stopAirports,
+      stopsLabel: stopInfo.stopsLabel,
       durationMinutes: totalDuration,
       durationLabel: formatDuration(totalDuration),
-      airlines: [...new Set(segments.map((s) => s.airlineName))],
-      segments,
+      airlines: [...new Set(enrichedSegments.map((s) => s.airlineName))],
+      segments: enrichedSegments,
       comfortScore: Number(comfort.toFixed(1)),
       baggageIncluded: true,
       refundable: price > basePrice * 1.15 && rand() > 0.55,
@@ -629,6 +681,25 @@ function generateOffers({
     const leg1 = Math.round(baseDuration * 0.4);
     const layover = 90;
     const leg2 = Math.round(baseDuration * 0.45);
+    const segments = withLayoverMinutes([
+      buildSegment({
+        airline: regionOf(from) === 'caribbean' ? AIRLINES.B6 || airline : airline,
+        origin: from,
+        destination: hub,
+        departAt,
+        durationMin: leg1,
+        flightNum: 200,
+      }),
+      buildSegment({
+        airline,
+        origin: hub,
+        destination: to,
+        departAt: addHours(departAt, (leg1 + layover) / 60),
+        durationMin: leg2,
+        flightNum: 201,
+      }),
+    ]);
+    const stopInfo = stopsMeta(segments);
     offers.push({
       id: `sky-${from}${to}-fallback-0`,
       origin: from,
@@ -639,29 +710,13 @@ function generateOffers({
       passengers,
       price: Math.round(basePrice * 1.1 * passengers),
       currency: 'USD',
-      stops: 1,
-      stopsLabel: '1 stop',
+      stops: stopInfo.stops,
+      stopAirports: stopInfo.stopAirports,
+      stopsLabel: stopInfo.stopsLabel,
       durationMinutes: leg1 + layover + leg2,
       durationLabel: formatDuration(leg1 + layover + leg2),
-      airlines: [airline.name],
-      segments: [
-        buildSegment({
-          airline: regionOf(from) === 'caribbean' ? AIRLINES.B6 || airline : airline,
-          origin: from,
-          destination: hub,
-          departAt,
-          durationMin: leg1,
-          flightNum: 200,
-        }),
-        buildSegment({
-          airline,
-          origin: hub,
-          destination: to,
-          departAt: addHours(departAt, (leg1 + layover) / 60),
-          durationMin: leg2,
-          flightNum: 201,
-        }),
-      ],
+      airlines: [...new Set(segments.map((s) => s.airlineName))],
+      segments,
       comfortScore: 3.8,
       baggageIncluded: true,
       refundable: false,

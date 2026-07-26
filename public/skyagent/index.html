@@ -275,13 +275,22 @@
     .offer {
       padding: 0.95rem 0;
       border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      display: block;
     }
     .offer.featured {
       background: rgba(244, 180, 96, 0.08);
       margin: 0 -0.55rem;
       padding-left: 0.55rem;
       padding-right: 0.55rem;
+      width: calc(100% + 1.1rem);
     }
+    .offer:active { opacity: 0.9; }
 
     .offer-top {
       display: flex;
@@ -308,6 +317,101 @@
       color: var(--soft);
     }
     .soft { color: var(--faint); font-size: 0.8rem; }
+    .stops-emph { color: var(--sunrise); font-weight: 500; }
+
+    .clarify {
+      margin-top: 1.2rem;
+      padding-top: 0.4rem;
+    }
+    .clarify-q {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.35rem;
+      margin: 0 0 0.85rem;
+      line-height: 1.25;
+    }
+    .clarify-opts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+    }
+    .clarify-opts button {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--mist);
+      font: 700 1rem/1 "DM Sans", sans-serif;
+      padding: 0.75rem 1rem;
+      min-width: 3rem;
+      cursor: pointer;
+    }
+    .family-chip {
+      margin-top: 0.85rem;
+      font-size: 0.8rem;
+      color: var(--faint);
+    }
+    .family-chip button {
+      border: none;
+      background: none;
+      color: var(--sunrise);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .sheet {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+    }
+    .sheet.open { display: block; }
+    .sheet-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(4, 12, 20, 0.72);
+    }
+    .sheet-panel {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      max-height: min(88dvh, 720px);
+      overflow: auto;
+      background: linear-gradient(180deg, #0c2a38 0%, #071525 100%);
+      border-top: 1px solid var(--line);
+      padding: 1.1rem 1.25rem calc(1.4rem + var(--safe-bottom));
+      animation: sheetUp 0.28s ease;
+    }
+    .sheet-handle {
+      width: 42px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(232,241,245,0.28);
+      margin: 0 auto 0.9rem;
+    }
+    .sheet-close {
+      float: right;
+      border: none;
+      background: transparent;
+      color: var(--faint);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .leg {
+      padding: 0.85rem 0;
+      border-bottom: 1px solid rgba(232,241,245,0.12);
+    }
+    .leg-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-weight: 700;
+    }
+    .layover {
+      margin: 0.35rem 0 0.15rem;
+      font-size: 0.8rem;
+      color: var(--sunrise);
+    }
 
     .agents { margin-top: 1.4rem; }
     .agent {
@@ -348,9 +452,13 @@
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.015); }
     }
+    @keyframes sheetUp {
+      from { transform: translateY(24px); opacity: 0.6; }
+      to { transform: translateY(0); opacity: 1; }
+    }
 
     @media (prefers-reduced-motion: reduce) {
-      .hero, .ask, .results, .cta { animation: none !important; opacity: 1; transform: none; }
+      .hero, .ask, .results, .cta, .sheet-panel { animation: none !important; opacity: 1; transform: none; }
     }
   </style>
 </head>
@@ -365,16 +473,17 @@
 
       <section class="ask">
         <label class="label" for="query">Ask</label>
-        <textarea id="query" placeholder="Cheapest round trip JFK to London leaving Sept 12, back Sept 20…">Find me the best flight from JFK to London leaving September 12 and returning September 20</textarea>
+        <textarea id="query" placeholder="Family trip Bermuda to London August 16…">Best flight from Bermuda to London for my family on August 16</textarea>
 
         <button class="cta" id="searchBtn" type="button">Ask the agents</button>
 
         <div class="prompts" id="prompts">
-          <button class="prompt" type="button" data-q="Cheapest JFK to LHR leaving September 12, back September 20">Cheapest JFK → London Sept 12–20</button>
-          <button class="prompt" type="button" data-q="Fastest SFO to Tokyo next Friday, return the following Sunday">Fastest SFO → Tokyo next weekend</button>
-          <button class="prompt" type="button" data-q="Best LAX to Paris leaving August 15 one way">Best LAX → Paris Aug 15</button>
+          <button class="prompt" type="button" data-q="Best flight from Bermuda to London for my family on August 16">Family · Bermuda → London</button>
+          <button class="prompt" type="button" data-q="Cheapest JFK to LHR leaving September 12, back September 20">Cheapest JFK → London</button>
+          <button class="prompt" type="button" data-q="Fastest SFO to Tokyo next month, two of us">Fastest SFO → Tokyo for 2</button>
         </div>
 
+        <p class="family-chip" id="familyChip" hidden></p>
         <p class="status" id="status" aria-live="polite"></p>
       </section>
 
@@ -386,7 +495,17 @@
     </main>
   </div>
 
+  <div class="sheet" id="sheet" aria-hidden="true">
+    <div class="sheet-backdrop" id="sheetBackdrop"></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+      <div class="sheet-handle"></div>
+      <button type="button" class="sheet-close" id="sheetClose">Close</button>
+      <div id="sheetBody"></div>
+    </div>
+  </div>
+
   <script>
+    const FAMILY_KEY = 'skyagent.familySize';
     const money = (n, c = 'USD') => {
       try {
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: c, maximumFractionDigits: 0 }).format(n);
@@ -400,9 +519,42 @@
       btn: document.getElementById('searchBtn'),
       status: document.getElementById('status'),
       results: document.getElementById('results'),
+      familyChip: document.getElementById('familyChip'),
+      sheet: document.getElementById('sheet'),
+      sheetBody: document.getElementById('sheetBody'),
+      sheetClose: document.getElementById('sheetClose'),
+      sheetBackdrop: document.getElementById('sheetBackdrop'),
     };
 
-    let state = { result: null, bucket: 'best' };
+    let state = {
+      result: null,
+      bucket: 'best',
+      pendingQuery: null,
+      familySize: Number(localStorage.getItem(FAMILY_KEY)) || null,
+    };
+
+    function rememberFamily(n) {
+      state.familySize = Number(n);
+      localStorage.setItem(FAMILY_KEY, String(n));
+      renderFamilyChip();
+    }
+
+    function clearFamily() {
+      state.familySize = null;
+      localStorage.removeItem(FAMILY_KEY);
+      renderFamilyChip();
+    }
+
+    function renderFamilyChip() {
+      if (!state.familySize) {
+        els.familyChip.hidden = true;
+        els.familyChip.innerHTML = '';
+        return;
+      }
+      els.familyChip.hidden = false;
+      els.familyChip.innerHTML = `Remembered family size: <strong>${state.familySize}</strong> · <button type="button" id="clearFamily">clear</button>`;
+      document.getElementById('clearFamily')?.addEventListener('click', clearFamily);
+    }
 
     function formatTripDate(iso) {
       if (!iso) return '';
@@ -415,25 +567,107 @@
       }
     }
 
+    function formatTime(iso) {
+      try {
+        return new Date(iso).toLocaleTimeString('en-US', {
+          hour: 'numeric', minute: '2-digit', timeZone: 'UTC',
+        }) + ' UTC';
+      } catch {
+        return iso;
+      }
+    }
+
+    function offerById(id) {
+      const data = state.result;
+      if (!data) return null;
+      if (data.recommendation?.id === id) return data.recommendation;
+      for (const key of ['cheapest', 'shortest', 'best']) {
+        const hit = (data.buckets?.[key] || []).find((o) => o.id === id);
+        if (hit) return hit;
+      }
+      return null;
+    }
+
     function offerHtml(offer, featured) {
       const tripDates = offer.returnDate
         ? `${formatTripDate(offer.departDate)} → ${formatTripDate(offer.returnDate)}`
         : formatTripDate(offer.departDate);
+      const pax = offer.passengers > 1 ? ` · total for ${offer.passengers}` : '';
       return `
-        <article class="offer ${featured ? 'featured' : ''}">
+        <button type="button" class="offer ${featured ? 'featured' : ''}" data-offer-id="${offer.id}">
           <div class="offer-top">
             <div class="route">${offer.origin} → ${offer.destination}</div>
             <div class="price">${money(offer.price, offer.currency)}</div>
           </div>
-          <div class="meta">${tripDates ? tripDates + ' · ' : ''}${offer.durationLabel} · ${offer.stopsLabel} · ${offer.airlines.join(', ')}</div>
-          <div class="soft">Comfort ${offer.comfortScore}${offer.baggageIncluded ? ' · bags included' : ' · bags extra'}</div>
-        </article>
+          <div class="meta">${tripDates ? tripDates + ' · ' : ''}${offer.durationLabel} · <span class="stops-emph">${offer.stopsLabel}</span> · ${offer.airlines.join(', ')}</div>
+          <div class="soft">Comfort ${offer.comfortScore}${offer.baggageIncluded ? ' · bags included' : ' · bags extra'}${pax} · tap for details</div>
+        </button>
       `;
+    }
+
+    function openDetails(offer) {
+      if (!offer) return;
+      const legs = (offer.segments || []).map((seg, i) => `
+        ${seg.layoverLabel ? `<div class="layover">Layover in ${seg.origin} · ${seg.layoverLabel}</div>` : ''}
+        <div class="leg">
+          <div class="leg-top">
+            <span>${seg.origin} → ${seg.destination}</span>
+            <span>${seg.durationLabel}</span>
+          </div>
+          <div class="meta">${seg.airlineName} ${seg.flightNumber}</div>
+          <div class="soft">${formatTime(seg.departAt)} → ${formatTime(seg.arriveAt)}</div>
+        </div>
+      `).join('');
+
+      els.sheetBody.innerHTML = `
+        <p class="label">Flight details</p>
+        <h2 class="concierge-title" id="sheetTitle">${offer.origin} → ${offer.destination}</h2>
+        <p class="concierge-body">
+          ${money(offer.price, offer.currency)}${offer.passengers > 1 ? ` total for ${offer.passengers}` : ''}
+          · ${offer.durationLabel} · <span class="stops-emph">${offer.stopsLabel}</span>
+        </p>
+        ${legs}
+        <p class="footnote">${offer.baggageIncluded ? 'Bags included' : 'Bags may be extra'} · Comfort ${offer.comfortScore}${offer.refundable ? ' · refundable' : ''}</p>
+      `;
+      els.sheet.classList.add('open');
+      els.sheet.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeDetails() {
+      els.sheet.classList.remove('open');
+      els.sheet.setAttribute('aria-hidden', 'true');
+    }
+
+    function renderClarification(data) {
+      const q = data.clarification?.question || 'How many people are flying?';
+      const opts = data.clarification?.options || [2, 3, 4, 5, 6];
+      els.results.hidden = false;
+      els.results.classList.add('show');
+      els.results.innerHTML = `
+        <div class="clarify">
+          <p class="label">Quick question</p>
+          <p class="clarify-q">${q}</p>
+          <div class="clarify-opts">
+            ${opts.map((n) => `<button type="button" data-pax="${n}">${n}</button>`).join('')}
+          </div>
+        </div>
+      `;
+      els.results.querySelectorAll('[data-pax]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          rememberFamily(btn.dataset.pax);
+          search({ query: data.pendingQuery || els.query.value, passengers: Number(btn.dataset.pax) });
+        });
+      });
     }
 
     function render() {
       const data = state.result;
       if (!data) return;
+
+      if (data.status === 'needs_clarification') {
+        renderClarification(data);
+        return;
+      }
 
       const concierge = data.agents.find((a) => a.agent === 'Concierge') || {};
       const offers = data.buckets[state.bucket] || [];
@@ -445,6 +679,7 @@
         data.brief?.returnDate
           ? `${formatTripDate(data.brief.departDate)} → ${formatTripDate(data.brief.returnDate)}`
           : formatTripDate(data.brief?.departDate),
+        data.brief?.passengers > 1 ? `${data.brief.passengers} travelers` : null,
       ].filter(Boolean).join(' · ');
 
       els.results.hidden = false;
@@ -491,26 +726,36 @@
           render();
         });
       });
+
+      els.results.querySelectorAll('[data-offer-id]').forEach((btn) => {
+        btn.addEventListener('click', () => openDetails(offerById(btn.dataset.offerId)));
+      });
     }
 
-    async function search(override) {
-      const query = (override?.query ?? els.query.value).trim();
+    async function search(override = {}) {
+      const query = (override.query ?? els.query.value).trim();
       if (!query) {
         els.status.textContent = 'Tell me where and when you want to fly.';
         return;
       }
 
-      if (override?.query) els.query.value = override.query;
+      if (override.query) els.query.value = override.query;
+      state.pendingQuery = query;
+
+      const passengers = override.passengers || state.familySize || undefined;
 
       els.status.textContent = '';
       els.btn.disabled = true;
       els.btn.textContent = 'Agents working…';
 
       try {
+        const body = { query, message: query };
+        if (passengers) body.passengers = passengers;
+
         const res = await fetch('/api/flights/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, message: query }),
+          body: JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Search failed');
@@ -518,6 +763,9 @@
         state.result = data;
         if (['cheapest', 'shortest', 'best'].includes(data.brief?.preference)) {
           state.bucket = data.brief.preference;
+        }
+        if (data.brief?.passengers > 1 && !state.familySize && data.status === 'ok') {
+          // optional: don't auto-remember unless family was mentioned
         }
         render();
       } catch (err) {
@@ -534,6 +782,9 @@
       if (!btn) return;
       search({ query: btn.dataset.q });
     });
+    els.sheetClose.addEventListener('click', closeDetails);
+    els.sheetBackdrop.addEventListener('click', closeDetails);
+    renderFamilyChip();
   </script>
 </body>
 </html>

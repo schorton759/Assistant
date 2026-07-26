@@ -95,4 +95,38 @@ describe('SkyAgent flight agents', () => {
     expect(brief.departDate >= new Date().toISOString().slice(0, 10)).toBe(true);
     expect(brief.departDate.slice(5)).toBe('08-16');
   });
+
+  test('family without count asks for passenger clarification', async () => {
+    delete process.env.NVIDIA_API_KEY;
+    const result = await searchFlights({
+      query: 'best flight from Bermuda to London for my family on August 16',
+    });
+    expect(result.status).toBe('needs_clarification');
+    expect(result.clarification.type).toBe('passenger_count');
+    expect(result.offerCount).toBe(0);
+  });
+
+  test('remembered family size skips clarification', async () => {
+    delete process.env.NVIDIA_API_KEY;
+    const result = await searchFlights({
+      query: 'best flight from Bermuda to London for my family on August 16',
+      passengers: 4,
+    });
+    expect(result.status).toBe('ok');
+    expect(result.brief.passengers).toBe(4);
+    expect(result.buckets.best[0].stopsLabel).toMatch(/Nonstop|stop in|stops via/);
+  });
+
+  test('one-stop offers name the layover airport', () => {
+    const offers = generateOffers({
+      origin: 'BDA',
+      destination: 'LHR',
+      departDate: '2026-08-16',
+    });
+    const oneStop = offers.find((o) => o.stops === 1);
+    expect(oneStop).toBeTruthy();
+    expect(oneStop.stopsLabel).toMatch(/^1 stop in [A-Z]{3}$/);
+    expect(oneStop.stopAirports).toHaveLength(1);
+    expect(oneStop.segments[1].layoverLabel).toBeTruthy();
+  });
 });

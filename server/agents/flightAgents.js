@@ -19,6 +19,8 @@ function summarizeOffer(offer) {
     price: offer.price,
     currency: offer.currency,
     stops: offer.stops,
+    stopAirports: offer.stopAirports || [],
+    stopsLabel: offer.stopsLabel,
     durationMinutes: offer.durationMinutes,
     durationLabel: offer.durationLabel,
     airlines: offer.airlines,
@@ -28,6 +30,7 @@ function summarizeOffer(offer) {
     departAt: offer.segments[0]?.departAt,
     departDate: offer.departDate,
     returnDate: offer.returnDate || null,
+    passengers: offer.passengers,
   };
 }
 
@@ -135,6 +138,23 @@ function localIntentParse(message, fallback = {}) {
         ? 'best'
         : fallback.preference || 'best';
 
+  const familyMentioned = /\b(family|families|kids|children|child|wife|husband|spouse|partner|toddler|baby|babies)\b/i.test(text);
+  let passengers = Number(fallback.passengers) || null;
+  const partyMatch = text.match(
+    /\b(?:party of|family of|group of|for)\s+(\d{1,2})\b|\b(\d{1,2})\s*(?:passengers?|people|persons?|travellers?|travelers?|of us|tickets?)\b|\b(?:me and|with)\s+(\d{1,2})\s*(?:others?|kids?|children)?\b/i
+  );
+  if (partyMatch) {
+    passengers = Number(partyMatch[1] || partyMatch[2] || partyMatch[3]);
+  } else if (/\b(just me|solo|one passenger|1 passenger)\b/i.test(text)) {
+    passengers = 1;
+  } else if (/\b(couple|two of us|me and my (wife|husband|partner|spouse))\b/i.test(text)) {
+    passengers = 2;
+  }
+
+  const needsPassengerCount = Boolean(
+    familyMentioned && !passengers && !fallback.passengers
+  );
+
   const today = new Date();
   const parsedDates = parseDatesFromText(text, fallback);
   const defaultDepart = new Date(today.getTime() + 21 * 86400000);
@@ -163,7 +183,9 @@ function localIntentParse(message, fallback = {}) {
     destination,
     departDate,
     returnDate,
-    passengers: fallback.passengers || 1,
+    passengers: passengers || Number(fallback.passengers) || 1,
+    familyMentioned,
+    needsPassengerCount,
     cabin: fallback.cabin || 'economy',
     preference,
     notes: text.slice(0, 240),
@@ -212,7 +234,13 @@ Return JSON:
       destination: normalizeAirport(form?.destination) || normalizeAirport(data.destination) || fallback.destination,
       departDate: form?.departDate || mergedDates.departDate || data.departDate || fallback.departDate,
       returnDate: form?.returnDate || mergedDates.returnDate || data.returnDate || fallback.returnDate,
-      passengers: Number(form?.passengers || data.passengers) || fallback.passengers,
+      // If user said "family" with no count, don't trust a model default of 1
+      passengers: form?.passengers
+        || (fallback.needsPassengerCount
+          ? null
+          : (Number(data.passengers) || fallback.passengers || 1)),
+      familyMentioned: fallback.familyMentioned,
+      needsPassengerCount: Boolean(fallback.needsPassengerCount && !form?.passengers),
       cabin: form?.cabin || data.cabin || fallback.cabin,
       preference: form?.preference || data.preference || fallback.preference,
       notes: data.notes || fallback.notes,
@@ -410,18 +438,27 @@ Return JSON:
 }
 
 async function searchFlights(input = {}) {
+  const rememberedPassengers = Number(input.passengers);
   const form = {
     origin: input.origin,
     destination: input.destination,
     departDate: input.departDate,
     returnDate: input.returnDate || null,
-    passengers: input.passengers || 1,
+    passengers: Number.isFinite(rememberedPassengers) && rememberedPassengers > 0
+      ? rememberedPassengers
+      : undefined,
     cabin: input.cabin || 'economy',
     preference: input.preference || 'best',
   };
 
   const intent = await runIntentAgent({ message: input.query || input.message || '', form });
   const brief = intent.brief;
+
+  // Remembered / explicit passenger count wins
+  if (form.passengers) {
+    brief.passengers = form.passengers;
+    brief.needsPassengerCount = false;
+  }
 
   if (!brief.origin || !brief.destination) {
     const error = new Error('Please provide origin and destination (airport code or city).');
@@ -432,6 +469,27 @@ async function searchFlights(input = {}) {
   if (!brief.departDate) {
     brief.departDate = new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10);
   }
+
+  if (brief.needsPassengerCount) {
+    return {
+      status: 'needs_clarification',
+      clarification: {
+        type: 'passenger_count',
+        question: 'How many people are flying in your family? I’ll remember this for next time.',
+        options: [2, 3, 4, 5, 6],
+      },
+      brief,
+      nvidiaEnabled: hasNvidiaKey(),
+      agents: [intent],
+      recommendation: null,
+      buckets: { cheapest: [], shortest: [], best: [] },
+      offerCount: 0,
+      generatedAt: new Date().toISOString(),
+      pendingQuery: input.query || input.message || '',
+    };
+  }
+
+  brief.passengers = Number(brief.passengers) || 1;
 
   const offers = generateOffers({
     origin: brief.origin,
@@ -481,6 +539,7 @@ async function searchFlights(input = {}) {
   const recommendation = allById[concierge.recommendationId] || bestOffers[0] || cheapestOffers[0];
 
   return {
+    status: 'ok',
     brief,
     nvidiaEnabled: hasNvidiaKey(),
     recommendation,
