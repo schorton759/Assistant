@@ -462,6 +462,58 @@
     }
     .watch-cta:disabled { opacity: 0.55; cursor: default; }
 
+    .prefs {
+      margin-top: 0.9rem;
+      border-top: 1px solid var(--line);
+      padding-top: 0.65rem;
+      color: var(--faint);
+      font-size: 0.85rem;
+    }
+    .prefs summary { cursor: pointer; color: var(--soft); }
+    .pref-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 0.55rem;
+    }
+    .pref-row input[type="text"],
+    .pref-row input:not([type]),
+    .pref-row input[type="number"] {
+      width: 7rem;
+      background: rgba(7, 21, 37, 0.45);
+      border: 1px solid var(--line);
+      color: var(--mist);
+      padding: 0.4rem 0.5rem;
+      font: inherit;
+    }
+    .pref-row.check { justify-content: flex-start; gap: 0.45rem; }
+
+    .tradeoff {
+      margin: 0.55rem 0;
+      padding: 0.55rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .tradeoff strong { display: block; color: var(--sunrise); font-size: 0.95rem; }
+    .tradeoff p { margin: 0.25rem 0 0; font-size: 0.82rem; color: var(--faint); }
+
+    .postbook {
+      margin-top: 1.6rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+    }
+    .postbook textarea {
+      width: 100%;
+      margin-top: 0.45rem;
+      min-height: 4.5rem;
+      resize: vertical;
+      background: rgba(7, 21, 37, 0.45);
+      border: 1px solid var(--line);
+      color: var(--mist);
+      font: inherit;
+      padding: 0.7rem 0.75rem;
+    }
+
     .sheet {
       position: fixed;
       inset: 0;
@@ -617,9 +669,21 @@
 
         <div class="prompts" id="prompts">
           <button class="prompt" type="button" data-q="Best flight from Bermuda to London for my family on August 16">Family · Bermuda → London</button>
+          <button class="prompt" type="button" data-q="Plan my whole trip Bermuda to London August 16 returning August 23 — flights, hotel near South Kensington, rental car, and airport transfer">Whole trip plan</button>
+          <button class="prompt" type="button" data-q="Same trip but leave a day earlier">Same trip · day earlier</button>
           <button class="prompt" type="button" data-q="Cheapest JFK to LHR leaving September 12, back September 20, and a rental car in London">Flight + rental car</button>
-          <button class="prompt" type="button" data-q="Rent an SUV at Heathrow from August 16 to August 23">Car rental · Heathrow</button>
         </div>
+
+        <details class="prefs" id="prefsBox">
+          <summary>Traveler prefs</summary>
+          <label class="pref-row">Home airport
+            <input id="prefHome" maxlength="3" placeholder="BDA" />
+          </label>
+          <label class="pref-row">Budget max (USD)
+            <input id="prefBudget" type="number" min="0" step="50" placeholder="optional" />
+          </label>
+          <label class="pref-row check"><input type="checkbox" id="prefRedEye" /> Avoid red-eyes</label>
+        </details>
 
         <p class="family-chip" id="familyChip" hidden></p>
         <div class="watch-panel" id="watchPanel" hidden></div>
@@ -627,6 +691,13 @@
       </section>
 
       <section class="results" id="results" hidden></section>
+
+      <section class="postbook" id="postbook">
+        <p class="label">Already booked?</p>
+        <textarea id="confirmPaste" rows="3" placeholder="Paste confirmation / PNR / flight email text…"></textarea>
+        <button class="watch-cta" id="postbookBtn" type="button">Build reminders + calendar</button>
+        <div id="postbookOut" hidden></div>
+      </section>
 
       <p class="install">
         On iPhone: tap Share → <strong>Add to Home Screen</strong> for the full-screen app feel.
@@ -646,6 +717,8 @@
   <script>
     const FAMILY_KEY = 'skyagent.familyProfile';
     const DEVICE_KEY = 'skyagent.deviceId';
+    const PREFS_KEY = 'skyagent.travelerPrefs';
+    const LAST_TRIP_KEY = 'skyagent.lastTrip';
 
     function getDeviceId() {
       let id = localStorage.getItem(DEVICE_KEY);
@@ -654,6 +727,39 @@
         localStorage.setItem(DEVICE_KEY, id);
       }
       return id;
+    }
+
+    function loadPrefs() {
+      try {
+        return JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') || {};
+      } catch {
+        return {};
+      }
+    }
+
+    function savePrefs(p) {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+    }
+
+    function loadLastTrip() {
+      try {
+        return JSON.parse(localStorage.getItem(LAST_TRIP_KEY) || 'null');
+      } catch {
+        return null;
+      }
+    }
+
+    function saveLastTrip(brief) {
+      if (!brief?.origin || !brief?.destination) return;
+      localStorage.setItem(LAST_TRIP_KEY, JSON.stringify({
+        origin: brief.origin,
+        destination: brief.destination,
+        departDate: brief.departDate,
+        returnDate: brief.returnDate || null,
+        passengers: brief.passengers,
+        ages: brief.ages || null,
+        cabin: brief.cabin || 'economy',
+      }));
     }
 
     const money = (n, c = 'USD') => {
@@ -1160,6 +1266,30 @@
       });
     }
 
+    function renderTradeoffs(tradeoffs = []) {
+      if (!tradeoffs.length) return '';
+      return `
+        <p class="label" style="margin-top:1.2rem">Honest tradeoffs</p>
+        ${tradeoffs.map((t) => `
+          <div class="tradeoff">
+            <strong>${t.headline}</strong>
+            <p>${t.detail || ''}</p>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    function renderPreTrip(preTrip) {
+      if (!preTrip?.tips?.length) return '';
+      return `
+        <p class="label" style="margin-top:1.2rem">Pre-trip ops</p>
+        <p class="pricing-note">Layover risk: ${preTrip.layoverRisk || 'n/a'}</p>
+        <ul class="soft" style="padding-left:1.1rem;margin:.4rem 0 0">
+          ${preTrip.tips.map((t) => `<li style="margin:.25rem 0">${t}</li>`).join('')}
+        </ul>
+      `;
+    }
+
     function renderFlightsBlock(flights) {
       if (!flights || flights.status === 'needs_clarification') return '';
       const concierge = (flights.agents || []).find((a) => a.agent === 'Concierge') || {};
@@ -1190,6 +1320,8 @@
         <h2 class="concierge-title">${concierge.headline || 'Your AI travel desk recommends'}</h2>
         <p class="concierge-body">${concierge.summary || ''}</p>
         ${flights.recommendation ? offerHtml(flights.recommendation, true) : ''}
+        ${renderTradeoffs(flights.tradeoffs || [])}
+        ${renderPreTrip(flights.preTrip)}
         <div class="tabs">
           ${['cheapest', 'shortest', 'best'].map((key) => `
             <button class="tab ${state.bucket === key ? 'active' : ''}" data-bucket="${key}" type="button">
@@ -1201,6 +1333,7 @@
         <button type="button" class="watch-cta" id="saveWatchBtn">
           Watch this trip · alert if under ${money(Math.max(1, Math.round((flights.buckets?.cheapest?.[0]?.price || flights.recommendation?.price || 0) * 0.92)), flights.buckets?.cheapest?.[0]?.currency || flights.recommendation?.currency)}
         </button>
+        <button type="button" class="watch-cta" id="shareTripBtn">Share trip link + calendar</button>
       `;
     }
 
@@ -1221,6 +1354,57 @@
         ${cars.recommendation ? carHtml(cars.recommendation, true) : ''}
         ${(cars.offers || []).map((o) => carHtml(o, o.id === cars.recommendation?.id)).join('')}
       `;
+    }
+
+    function renderHotelsBlock(hotels) {
+      if (!hotels) return '';
+      const agent = (hotels.agents || [])[0] || {};
+      return `
+        <p class="label" style="margin-top:1.6rem">Hotels</p>
+        <h2 class="concierge-title">${agent.headline || 'Stay options'}</h2>
+        <p class="concierge-body">${agent.summary || ''}</p>
+        ${(hotels.offers || []).map((o) => `
+          <button type="button" class="offer ${o.id === hotels.recommendation?.id ? 'featured' : ''}" data-offer-id="${o.id}">
+            <div class="offer-top">
+              <div class="route">${o.name}</div>
+              <div class="price">${money(o.price, o.currency)}</div>
+            </div>
+            <div class="meta">${o.area} · ${o.stars}★ · ${o.nights} nights · ${o.rooms} room${o.rooms > 1 ? 's' : ''}</div>
+            <div class="soft">${formatTripDate(o.checkIn)} → ${formatTripDate(o.checkOut)} · tap to book</div>
+          </button>
+        `).join('')}
+      `;
+    }
+
+    function renderTransfersBlock(transfers) {
+      if (!transfers) return '';
+      const agent = (transfers.agents || [])[0] || {};
+      return `
+        <p class="label" style="margin-top:1.6rem">Transfers</p>
+        <h2 class="concierge-title">${agent.headline || 'Airport transfer'}</h2>
+        <p class="concierge-body">${agent.summary || ''}</p>
+        ${(transfers.offers || []).map((o) => `
+          <button type="button" class="offer ${o.id === transfers.recommendation?.id ? 'featured' : ''}" data-offer-id="${o.id}">
+            <div class="offer-top">
+              <div class="route">${o.mode}</div>
+              <div class="price">${money(o.price, o.currency)}</div>
+            </div>
+            <div class="meta">${o.vendor} · ${o.durationLabel} · ${o.seats === 99 ? 'shared' : o.seats + ' seats'}</div>
+            <div class="soft">${o.location} arrival · tap for details</div>
+          </button>
+        `).join('')}
+      `;
+    }
+
+    function hotelOrTransferById(id) {
+      const data = state.result;
+      for (const block of [data?.hotels, data?.transfers, carPayload(data)]) {
+        if (!block) continue;
+        if (block.recommendation?.id === id) return block.recommendation;
+        const hit = (block.offers || []).find((o) => o.id === id);
+        if (hit) return hit;
+      }
+      return null;
     }
 
     function renderAgents(agents = []) {
@@ -1249,9 +1433,13 @@
 
       const flights = flightPayload(data);
       const cars = carPayload(data);
+      const hotels = data.hotels || (data.type === 'hotels' ? data : null);
+      const transfers = data.transfers || (data.type === 'transfers' ? data : null);
       const agents = [
         ...((flights && flights.agents) || data.agents || []),
         ...((cars && cars.agents) || []),
+        ...((hotels && hotels.agents) || []),
+        ...((transfers && transfers.agents) || []),
       ];
 
       els.results.hidden = false;
@@ -1261,13 +1449,15 @@
 
       els.results.innerHTML = `
         ${flights ? renderFlightsBlock(flights) : ''}
+        ${hotels ? renderHotelsBlock(hotels) : ''}
+        ${transfers ? renderTransfersBlock(transfers) : ''}
         ${cars ? renderCarsBlock(cars) : ''}
+        ${!flights ? renderTradeoffs(data.tradeoffs || []) : ''}
+        ${!flights ? renderPreTrip(data.preTrip) : ''}
         ${renderAgents(agents)}
         <p class="footnote">
-          ${(flights || cars || data).nvidiaEnabled
-            ? 'Powered by free NVIDIA NIM models. Booking continues on airline / rental sites with your trip prefilled.'
-            : 'Local ranking mode. Booking links still open with your trip details.'}
-          Saved trips re-check market fares when you open SkyAgent.
+          SkyAgent remembers your family, watches prices, plans hotels/cars/transfers, and shares a trip link.
+          Live fares when available — always confirm on the booking site.
         </p>
       `;
 
@@ -1279,10 +1469,55 @@
       });
 
       els.results.querySelectorAll('[data-offer-id]').forEach((btn) => {
-        btn.addEventListener('click', () => openDetails(offerById(btn.dataset.offerId)));
+        btn.addEventListener('click', () => {
+          openDetails(offerById(btn.dataset.offerId) || hotelOrTransferById(btn.dataset.offerId));
+        });
       });
 
       document.getElementById('saveWatchBtn')?.addEventListener('click', saveCurrentTripWatch);
+      document.getElementById('shareTripBtn')?.addEventListener('click', shareCurrentTrip);
+    }
+
+    function currentPrefs() {
+      return {
+        homeAirport: (document.getElementById('prefHome')?.value || '').trim().toUpperCase() || null,
+        budgetMax: Number(document.getElementById('prefBudget')?.value) || null,
+        avoidRedEyes: Boolean(document.getElementById('prefRedEye')?.checked),
+      };
+    }
+
+    async function shareCurrentTrip() {
+      const data = state.result;
+      const flights = flightPayload(data);
+      if (!flights?.recommendation) {
+        els.status.textContent = 'Search a trip first.';
+        return;
+      }
+      els.status.textContent = 'Creating share link…';
+      try {
+        const res = await fetch('/api/flights/share', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            brief: flights.brief,
+            recommendation: flights.recommendation,
+            cheapest: flights.buckets?.cheapest?.[0],
+            tradeoffs: flights.tradeoffs,
+            preTrip: flights.preTrip,
+            hotels: data.hotels || null,
+            cars: carPayload(data),
+            transfers: data.transfers || null,
+          }),
+        });
+        const out = await res.json();
+        if (!res.ok) throw new Error(out.error || 'Share failed');
+        const url = `${location.origin}${out.url}`;
+        try { await navigator.clipboard.writeText(url); } catch { /* ignore */ }
+        els.status.textContent = `Share link copied: ${url}`;
+        window.open(out.url, '_blank');
+      } catch (err) {
+        els.status.textContent = err.message || 'Share failed';
+      }
     }
 
     async function search(override = {}) {
@@ -1297,15 +1532,19 @@
 
       const passengers = override.passengers || state.familySize || undefined;
       const ages = override.ages || state.familyAges || undefined;
+      const prefs = currentPrefs();
+      savePrefs(prefs);
 
       els.status.textContent = '';
       els.btn.disabled = true;
       els.btn.textContent = 'Agents working…';
 
       try {
-        const body = { query, message: query };
+        const body = { query, message: query, prefs, ...prefs };
         if (passengers) body.passengers = passengers;
         if (ages?.length) body.ages = ages;
+        const lastTrip = loadLastTrip();
+        if (lastTrip) body.lastTrip = lastTrip;
 
         const res = await fetch('/api/flights/search', {
           method: 'POST',
@@ -1317,6 +1556,7 @@
 
         state.result = data;
         const brief = data.brief || data.flights?.brief;
+        if (brief) saveLastTrip(brief);
         if (['cheapest', 'shortest', 'best'].includes(brief?.preference)) {
           state.bucket = brief.preference;
         }
@@ -1329,14 +1569,100 @@
       }
     }
 
+    async function runPostbook() {
+      const text = document.getElementById('confirmPaste')?.value || '';
+      const out = document.getElementById('postbookOut');
+      if (!text.trim()) {
+        els.status.textContent = 'Paste a confirmation first.';
+        return;
+      }
+      els.status.textContent = 'Reading confirmation…';
+      try {
+        const res = await fetch('/api/flights/postbook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        const p = data.parsed || {};
+        out.hidden = false;
+        out.innerHTML = `
+          <p class="label" style="margin-top:1rem">Parsed</p>
+          <p class="soft">${[p.pnr && `PNR ${p.pnr}`, p.flightNumber, p.origin && p.destination ? `${p.origin} → ${p.destination}` : '', p.departDate].filter(Boolean).join(' · ') || 'Limited details found'}</p>
+          <p class="label" style="margin-top:.8rem">Reminders</p>
+          <ul class="soft" style="padding-left:1.1rem">${(data.reminders || []).map((r) => `<li>${r.when}: ${r.text}</li>`).join('')}</ul>
+          <p class="label" style="margin-top:.8rem">Tips</p>
+          <ul class="soft" style="padding-left:1.1rem">${(data.tips || []).map((t) => `<li>${t}</li>`).join('')}</ul>
+          <button type="button" class="watch-cta" id="dlIcsBtn">Download calendar (.ics)</button>
+        `;
+        document.getElementById('dlIcsBtn')?.addEventListener('click', () => {
+          const blob = new Blob([data.ics], { type: 'text/calendar' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'skyagent-booking.ics';
+          a.click();
+        });
+        els.status.textContent = 'Reminders ready.';
+      } catch (err) {
+        els.status.textContent = err.message || 'Could not parse confirmation';
+      }
+    }
+
+    // openDetails: support hotels/transfers
+    const _openDetails = openDetails;
+    openDetails = function(offer) {
+      if (!offer) return;
+      if (offer.type === 'hotel') {
+        els.sheetBody.innerHTML = `
+          <p class="label">Hotel details</p>
+          <h2 class="concierge-title" id="sheetTitle">${offer.name}</h2>
+          <p class="concierge-body">${money(offer.price, offer.currency)} · ${offer.nights} nights · ${offer.rooms} room(s)</p>
+          <div class="leg"><div class="meta">${offer.area} · ${offer.stars}★</div>
+          <div class="soft">${formatTripDate(offer.checkIn)} → ${formatTripDate(offer.checkOut)}</div></div>
+          <p class="label">Continue to book</p>
+          ${bookingButtons(offer.bookingLinks || [])}
+        `;
+        els.sheet.classList.add('open');
+        els.sheet.setAttribute('aria-hidden', 'false');
+        return;
+      }
+      if (offer.type === 'transfer') {
+        els.sheetBody.innerHTML = `
+          <p class="label">Transfer details</p>
+          <h2 class="concierge-title" id="sheetTitle">${offer.mode}</h2>
+          <p class="concierge-body">${money(offer.price, offer.currency)} · ${offer.durationLabel} · ${offer.vendor}</p>
+          <div class="leg"><div class="soft">${offer.location} · ${offer.passengers} travelers</div></div>
+          <p class="label">Continue to book</p>
+          ${bookingButtons(offer.bookingLinks || [])}
+        `;
+        els.sheet.classList.add('open');
+        els.sheet.setAttribute('aria-hidden', 'false');
+        return;
+      }
+      return _openDetails(offer);
+    };
+
     els.btn.addEventListener('click', () => search());
     document.getElementById('prompts').addEventListener('click', (e) => {
       const btn = e.target.closest('.prompt');
       if (!btn) return;
       search({ query: btn.dataset.q });
     });
+    document.getElementById('postbookBtn')?.addEventListener('click', runPostbook);
     els.sheetClose.addEventListener('click', closeDetails);
     els.sheetBackdrop.addEventListener('click', closeDetails);
+
+    (function initPrefs() {
+      const p = loadPrefs();
+      const home = document.getElementById('prefHome');
+      const budget = document.getElementById('prefBudget');
+      const red = document.getElementById('prefRedEye');
+      if (home && p.homeAirport) home.value = p.homeAirport;
+      if (budget && p.budgetMax) budget.value = p.budgetMax;
+      if (red && p.avoidRedEyes) red.checked = true;
+    })();
+
     renderFamilyChip();
     refreshWatches({ check: true });
   </script>

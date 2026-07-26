@@ -25,6 +25,9 @@ function sendSkyAgent(_req, res) {
 
 app.get('/', sendSkyAgent);
 app.get(['/skyagent', '/skyagent/'], sendSkyAgent);
+app.get('/skyagent/trip/:id', (_req, res) => {
+  res.sendFile(path.join(publicDir, 'skyagent', 'trip.html'));
+});
 
 app.use(express.static(publicDir));
 
@@ -38,7 +41,8 @@ app.get('/api', (_req, res) => {
       '/api/flights/search',
       '/api/flights/ask',
       '/api/flights/trips',
-      '/api/flights/trips/check-all',
+      '/api/flights/share',
+      '/api/flights/postbook',
     ],
   });
 });

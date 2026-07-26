@@ -14,6 +14,75 @@ const { MODELS, hasNvidiaKey, generateJson } = require('../services/aiService');
 const { generateOffers, normalizeAirport } = require('../services/flightCatalog');
 const { buildFlightBookingLinks } = require('../services/bookingLinks');
 const { searchLiveOffers } = require('../services/liveFares');
+const { buildPreTripOps, buildTradeoffs } = require('../services/preTripOps');
+
+function shiftIsoDate(iso, days) {
+  if (!iso) return null;
+  const d = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function applyFollowUpOverrides(message, fallback = {}, lastTrip = null) {
+  const text = String(message || '');
+  if (!lastTrip) return fallback;
+  const next = { ...fallback };
+
+  const sameTrip = /\b(same trip|that trip|our trip|this trip|same flight|same family trip)\b/i.test(text)
+    || (!/\bfrom\b/i.test(text) && !/\bto\b/i.test(text) && /\b(day earlier|day later|one day|leave earlier|leave later|cheaper|nonstop|budget)\b/i.test(text));
+
+  if (sameTrip || /\b(day earlier|day later|leave (a )?day|push (it )?|move (it )?)\b/i.test(text)) {
+    next.origin = next.origin || lastTrip.origin;
+    next.destination = next.destination || lastTrip.destination;
+    next.passengers = next.passengers || lastTrip.passengers;
+    next.cabin = next.cabin || lastTrip.cabin;
+    if (!next.departDate || sameTrip) next.departDate = lastTrip.departDate;
+    if (lastTrip.returnDate && (sameTrip || !next.returnDate)) next.returnDate = lastTrip.returnDate;
+  }
+
+  if (/\b(day earlier|one day earlier|leave (a )?day earlier|day before)\b/i.test(text)) {
+    next.departDate = shiftIsoDate(next.departDate || lastTrip.departDate, -1);
+    if (next.returnDate || lastTrip.returnDate) {
+      next.returnDate = shiftIsoDate(next.returnDate || lastTrip.returnDate, -1);
+    }
+  }
+  if (/\b(day later|one day later|leave (a )?day later|day after)\b/i.test(text)) {
+    next.departDate = shiftIsoDate(next.departDate || lastTrip.departDate, 1);
+    if (next.returnDate || lastTrip.returnDate) {
+      next.returnDate = shiftIsoDate(next.returnDate || lastTrip.returnDate, 1);
+    }
+  }
+  if (/\b(avoid red[- ]?eyes?|no red[- ]?eyes?)\b/i.test(text)) next.avoidRedEyes = true;
+  if (/\bnonstop|direct only\b/i.test(text)) next.preference = 'shortest';
+  if (/\bcheap|budget|lowest\b/i.test(text)) next.preference = 'cheapest';
+
+  return next;
+}
+
+function applyTravelerPrefs(offers, prefs = {}) {
+  let list = [...offers];
+  if (prefs.avoidRedEyes) {
+    const filtered = list.filter((o) => {
+      const hour = new Date(o.segments?.[0]?.departAt || 0).getUTCHours();
+      return Number.isFinite(hour) ? hour >= 6 && hour <= 21 : true;
+    });
+    if (filtered.length) list = filtered;
+  }
+  if (Array.isArray(prefs.preferredAirlines) && prefs.preferredAirlines.length) {
+    const want = new Set(prefs.preferredAirlines.map((a) => String(a).toLowerCase()));
+    const preferred = list.filter((o) =>
+      (o.airlines || []).some((name) => want.has(String(name).toLowerCase()))
+      || (o.segments || []).some((s) => want.has(String(s.airline || '').toLowerCase()) || want.has(String(s.airlineName || '').toLowerCase()))
+    );
+    if (preferred.length) list = preferred;
+  }
+  if (Number(prefs.budgetMax) > 0) {
+    const under = list.filter((o) => o.price <= Number(prefs.budgetMax));
+    if (under.length) list = under;
+  }
+  return list;
+}
 
 function summarizeOffer(offer) {
   return {
@@ -101,6 +170,7 @@ function parseDatesFromText(text, fallback = {}) {
 }
 
 function localIntentParse(message, fallback = {}) {
+  const withFollowUp = applyFollowUpOverrides(message, fallback, fallback.lastTrip || null);
   const text = String(message || '');
   const upper = text.toUpperCase();
   const airportMatches = upper.match(/\b[A-Z]{3}\b/g) || [];
@@ -111,8 +181,8 @@ function localIntentParse(message, fallback = {}) {
   ]);
   const codes = airportMatches.filter((c) => known.has(c));
 
-  let origin = fallback.origin || codes[0] || null;
-  let destination = fallback.destination || codes[1] || null;
+  let origin = withFollowUp.origin || codes[0] || null;
+  let destination = withFollowUp.destination || codes[1] || null;
 
   const fromTo = text.match(/from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\.|on|next|under|leaving|august|september|october)/i);
   if (fromTo) {
@@ -138,10 +208,10 @@ function localIntentParse(message, fallback = {}) {
       ? 'shortest'
       : /best|comfort|balanced|recommend/i.test(text)
         ? 'best'
-        : fallback.preference || 'best';
+        : withFollowUp.preference || 'best';
 
   const familyMentioned = /\b(family|families|kids|children|child|wife|husband|spouse|partner|toddler|baby|babies)\b/i.test(text);
-  let passengers = Number(fallback.passengers) || null;
+  let passengers = Number(withFollowUp.passengers) || null;
   const partyMatch = text.match(
     /\b(?:party of|family of|group of|for)\s+(\d{1,2})\b|\b(\d{1,2})\s*(?:passengers?|people|persons?|travellers?|travelers?|of us|tickets?)\b|\b(?:me and|with)\s+(\d{1,2})\s*(?:others?|kids?|children)?\b/i
   );
@@ -154,14 +224,14 @@ function localIntentParse(message, fallback = {}) {
   }
 
   const needsPassengerCount = Boolean(
-    familyMentioned && !passengers && !fallback.passengers
+    familyMentioned && !passengers && !withFollowUp.passengers
   );
 
   const today = new Date();
-  const parsedDates = parseDatesFromText(text, fallback);
+  const parsedDates = parseDatesFromText(text, withFollowUp);
   const defaultDepart = new Date(today.getTime() + 21 * 86400000);
-  let departDate = parsedDates.departDate || fallback.departDate || defaultDepart.toISOString().slice(0, 10);
-  let returnDate = parsedDates.returnDate || fallback.returnDate || null;
+  let departDate = parsedDates.departDate || withFollowUp.departDate || defaultDepart.toISOString().slice(0, 10);
+  let returnDate = parsedDates.returnDate || withFollowUp.returnDate || null;
 
   // Never use past years from models/text without an explicit year far in the past
   if (departDate && departDate < today.toISOString().slice(0, 10)) {
@@ -185,11 +255,15 @@ function localIntentParse(message, fallback = {}) {
     destination,
     departDate,
     returnDate,
-    passengers: passengers || Number(fallback.passengers) || 1,
+    passengers: passengers || Number(withFollowUp.passengers) || 1,
     familyMentioned,
     needsPassengerCount,
-    cabin: fallback.cabin || 'economy',
+    cabin: withFollowUp.cabin || 'economy',
     preference,
+    avoidRedEyes: Boolean(withFollowUp.avoidRedEyes) || /\bavoid red[- ]?eyes?\b/i.test(text),
+    budgetMax: Number(withFollowUp.budgetMax) || null,
+    preferredAirlines: withFollowUp.preferredAirlines || [],
+    homeAirport: withFollowUp.homeAirport || null,
     notes: text.slice(0, 240),
   };
 }
@@ -445,8 +519,15 @@ async function searchFlights(input = {}) {
     ? input.ages.map((a) => Number(a)).filter((a) => Number.isFinite(a) && a >= 0 && a < 120)
     : null;
 
+  const prefs = {
+    avoidRedEyes: Boolean(input.avoidRedEyes || input.prefs?.avoidRedEyes),
+    budgetMax: Number(input.budgetMax || input.prefs?.budgetMax) || null,
+    preferredAirlines: input.preferredAirlines || input.prefs?.preferredAirlines || [],
+    homeAirport: normalizeAirport(input.homeAirport || input.prefs?.homeAirport) || null,
+  };
+
   const form = {
-    origin: input.origin,
+    origin: input.origin || prefs.homeAirport,
     destination: input.destination,
     departDate: input.departDate,
     returnDate: input.returnDate || null,
@@ -456,6 +537,11 @@ async function searchFlights(input = {}) {
     ages: agesInput && agesInput.length ? agesInput : undefined,
     cabin: input.cabin || 'economy',
     preference: input.preference || 'best',
+    avoidRedEyes: prefs.avoidRedEyes,
+    budgetMax: prefs.budgetMax,
+    preferredAirlines: prefs.preferredAirlines,
+    homeAirport: prefs.homeAirport,
+    lastTrip: input.lastTrip || null,
   };
 
   const intent = await runIntentAgent({ message: input.query || input.message || '', form });
@@ -553,9 +639,10 @@ async function searchFlights(input = {}) {
     pricing = {
       mode: 'live',
       providers: live.providers,
-      note: 'Prices from live market aggregators (Travelpayouts/Aviasales'
-        + (live.providers.includes('duffel') ? ' + Duffel' : '')
-        + '). Cached fares can lag — confirm on the booking site.',
+      sourcesCompared: live.providers,
+      note: 'Compared '
+        + live.providers.join(' + ')
+        + ' and kept the cheapest fare per itinerary. Cached fares can lag — confirm on the booking site.',
     };
   } else {
     offers = generateOffers({
@@ -570,12 +657,19 @@ async function searchFlights(input = {}) {
     pricing = {
       mode: 'catalog',
       providers: [],
+      sourcesCompared: [],
       note: live.disabled
         ? 'Demo catalog prices (live fares disabled). Set TRAVELPAYOUTS_TOKEN or LIVE_FARES=1.'
         : 'No live market rows for this route/date yet — showing route-aware demo catalog. Try nearby dates or a major city pair.',
       errors: live.errors || [],
     };
   }
+
+  offers = applyTravelerPrefs(offers, {
+    avoidRedEyes: brief.avoidRedEyes || prefs.avoidRedEyes,
+    budgetMax: brief.budgetMax || prefs.budgetMax,
+    preferredAirlines: prefs.preferredAirlines,
+  });
 
   offers = offers.map((o) => ({
     ...o,
@@ -619,14 +713,32 @@ async function searchFlights(input = {}) {
 
   const allById = Object.fromEntries(offers.map((o) => [o.id, o]));
   const recommendation = allById[concierge.recommendationId] || bestOffers[0] || cheapestOffers[0];
+  const tradeoffs = buildTradeoffs({
+    recommendation,
+    cheapest: cheapestOffers[0],
+    shortest: shortestOffers[0],
+  });
+  const preTrip = buildPreTripOps({
+    brief,
+    recommendation,
+    cheapest: cheapestOffers[0],
+  });
+
+  // Enrich concierge tips with pre-trip ops when local/empty
+  if (!concierge.tips?.length) {
+    concierge.tips = preTrip.tips.slice(0, 3);
+  }
 
   return {
     status: 'ok',
     type: 'flights',
     brief,
+    prefs,
     nvidiaEnabled: hasNvidiaKey(),
     pricing,
     recommendation,
+    tradeoffs,
+    preTrip,
     buckets: {
       cheapest: cheapestOffers,
       shortest: shortestOffers,
