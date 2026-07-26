@@ -30,9 +30,9 @@ import { colors } from './src/theme';
 type BucketKey = 'cheapest' | 'shortest' | 'best';
 
 const QUICK_PROMPTS = [
-  'Cheapest JFK to LHR next month',
-  'Fastest SFO to Tokyo round trip',
-  'Best LAX to Paris under comfort',
+  'Best flight from Bermuda to London August 16',
+  'Cheapest JFK to LHR leaving September 12, back September 20',
+  'Fastest SFO to Tokyo next month',
 ];
 
 function formatMoney(amount: number, currency = 'USD') {
@@ -84,17 +84,9 @@ export default function App() {
     DMSans_700Bold,
   });
 
-  const defaultDepart = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 21);
-    return d.toISOString().slice(0, 10);
-  })();
-
-  const [query, setQuery] = useState('Find the best flight from JFK to London next month');
-  const [origin, setOrigin] = useState('JFK');
-  const [destination, setDestination] = useState('LHR');
-  const [departDate, setDepartDate] = useState(defaultDepart);
-  const [returnDate, setReturnDate] = useState('');
+  const [query, setQuery] = useState(
+    'Find me the best flight from Bermuda to London leaving August 16'
+  );
   const [bucket, setBucket] = useState<BucketKey>('best');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,15 +130,8 @@ export default function App() {
     try {
       const data = await searchFlights({
         query: q,
-        origin,
-        destination,
-        departDate,
-        returnDate: returnDate || undefined,
-        preference: bucket,
       });
       setResult(data);
-      if (data.brief?.departDate) setDepartDate(data.brief.departDate);
-      if (data.brief?.returnDate) setReturnDate(data.brief.returnDate);
       if (data.brief?.preference && ['cheapest', 'shortest', 'best'].includes(data.brief.preference)) {
         setBucket(data.brief.preference as BucketKey);
       }
@@ -197,7 +182,7 @@ export default function App() {
                 <Text style={styles.brand}>SkyAgent</Text>
                 <Text style={styles.headline}>Your AI travel desk</Text>
                 <Text style={styles.subhead}>
-                  Ask in plain English. Agents hunt cheapest, shortest, and best routes.
+                  Say where, when, and what matters — cheapest, fastest, or best.
                 </Text>
               </Animated.View>
 
@@ -205,59 +190,11 @@ export default function App() {
                 <TextInput
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Weekend in Tokyo from SFO, keep it under pain…"
+                  placeholder="Cheapest round trip JFK to London leaving Sept 12, back Sept 20…"
                   placeholderTextColor="rgba(232,241,245,0.45)"
                   style={styles.askInput}
                   multiline
                 />
-                <View style={styles.codeRow}>
-                  <TextInput
-                    value={origin}
-                    onChangeText={setOrigin}
-                    autoCapitalize="characters"
-                    maxLength={3}
-                    style={styles.codeInput}
-                    placeholder="FROM"
-                    placeholderTextColor="rgba(232,241,245,0.4)"
-                  />
-                  <Text style={styles.codeArrow}>→</Text>
-                  <TextInput
-                    value={destination}
-                    onChangeText={setDestination}
-                    autoCapitalize="characters"
-                    maxLength={3}
-                    style={styles.codeInput}
-                    placeholder="TO"
-                    placeholderTextColor="rgba(232,241,245,0.4)"
-                  />
-                </View>
-
-                <View style={styles.dateRow}>
-                  <View style={styles.dateField}>
-                    <Text style={styles.dateLabel}>Depart</Text>
-                    <TextInput
-                      value={departDate}
-                      onChangeText={setDepartDate}
-                      placeholder="YYYY-MM-DD"
-                      placeholderTextColor="rgba(232,241,245,0.4)"
-                      style={styles.dateInput}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  </View>
-                  <View style={styles.dateField}>
-                    <Text style={styles.dateLabel}>Return</Text>
-                    <TextInput
-                      value={returnDate}
-                      onChangeText={setReturnDate}
-                      placeholder="optional"
-                      placeholderTextColor="rgba(232,241,245,0.4)"
-                      style={styles.dateInput}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  </View>
-                </View>
 
                 <Animated.View style={{ transform: [{ scale: ctaPulse }] }}>
                   <Pressable
@@ -423,7 +360,7 @@ const styles = StyleSheet.create({
     marginTop: 28,
   },
   askInput: {
-    minHeight: 96,
+    minHeight: 120,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(232,241,245,0.28)',
     color: colors.mist,
@@ -431,50 +368,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 26,
     paddingVertical: 12,
-  },
-  codeRow: {
-    marginTop: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  codeInput: {
-    flex: 1,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(232,241,245,0.28)',
-    color: colors.mist,
-    fontFamily: 'DMSans_700Bold',
-    fontSize: 22,
-    letterSpacing: 3,
-    paddingVertical: 10,
-    textAlign: 'center',
-  },
-  codeArrow: {
-    color: colors.sunrise,
-    fontFamily: 'Fraunces_600SemiBold',
-    fontSize: 22,
-  },
-  dateRow: {
-    marginTop: 18,
-    flexDirection: 'row',
-    gap: 12,
-  },
-  dateField: { flex: 1 },
-  dateLabel: {
-    fontFamily: 'DMSans_500Medium',
-    fontSize: 11,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-    color: 'rgba(232,241,245,0.5)',
-    marginBottom: 4,
-  },
-  dateInput: {
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(232,241,245,0.28)',
-    color: colors.mist,
-    fontFamily: 'DMSans_500Medium',
-    fontSize: 16,
-    paddingVertical: 10,
   },
   cta: {
     marginTop: 22,
