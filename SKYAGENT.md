@@ -15,6 +15,10 @@ iPhone (Expo Go)  →  /api/flights/search  →  Agent desk
 
 **Live prices first.** SkyAgent queries Travelpayouts/Aviasales market caches (and Duffel when `DUFFEL_ACCESS_TOKEN` is set), dedupes across sources, and ranks the cheapest real public fares. Amadeus Self-Service was shut down in July 2026, so it is not used. If a thin route has no live rows, SkyAgent falls back to a route-aware demo catalog and labels it clearly — never mixes fake catalog fares into a live “cheapest” list.
 
+**Trip dashboard.** Save a search to one plan with flight / hotel / car / transfer status (selected → watching → booked / skipped) and booking progress.
+
+**Smarter concierge.** Fast local synthesis with real price/time deltas; NVIDIA calls use shorter timeouts and a quicker default model, with `skyagent-local` when offline instead of empty fallbacks.
+
 **Saved trips + price watch.** After a search, tap **Watch this trip** — SkyAgent remembers the route, dates, and family ages, and alerts when the cheapest fare drops ~8% below what you saw (or your target). Watches re-check when you open the app.
 
 **Traveler memory.** Home airport, budget cap, avoid-red-eyes, and last trip — so “same trip but leave a day earlier” just works.

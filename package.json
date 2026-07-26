@@ -7,7 +7,7 @@
     "dev": "NODE_ENV=development nodemon server.js",
     "dev:flights": "NODE_ENV=development SKIP_MONGODB=true nodemon server/flightServer.js",
     "test": "TEST_MODE=true jest",
-    "test:flights": "TEST_MODE=true jest server/agents/__tests__/flightAgents.test.js server/services/__tests__/liveFares.test.js server/services/__tests__/tripWatch.test.js server/services/__tests__/tripExtras.test.js",
+    "test:flights": "TEST_MODE=true jest server/agents/__tests__/flightAgents.test.js server/services/__tests__/liveFares.test.js server/services/__tests__/tripWatch.test.js server/services/__tests__/tripExtras.test.js server/services/__tests__/tripPlan.test.js",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

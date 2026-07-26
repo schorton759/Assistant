@@ -9,8 +9,8 @@ const MODELS = {
   intent: process.env.NVIDIA_MODEL_INTENT || 'meta/llama-3.1-8b-instruct',
   // Price & duration specialists
   specialist: process.env.NVIDIA_MODEL_SPECIALIST || 'nvidia/llama-3.1-nemotron-nano-8b-v1',
-  // Travel-agent synthesis / best-route judgment
-  concierge: process.env.NVIDIA_MODEL_CONCIERGE || 'nvidia/llama-3.3-nemotron-super-49b-v1.5',
+  // Travel-agent synthesis — default to fast 8B; set NVIDIA_MODEL_CONCIERGE to the 49B if you want
+  concierge: process.env.NVIDIA_MODEL_CONCIERGE || 'meta/llama-3.1-8b-instruct',
   // Legacy alias used elsewhere in the repo
   default: process.env.NVIDIA_MODEL || 'meta/llama-3.1-8b-instruct',
 };
@@ -127,6 +127,7 @@ async function generateJson({
   user,
   temperature = 0.2,
   maxTokens = 1000,
+  timeout = 12000,
 }) {
   const result = await chatCompletion({
     model,
@@ -139,6 +140,7 @@ async function generateJson({
     ],
     temperature,
     maxTokens,
+    timeout,
   });
 
   const parsed = extractJson(result.content);

@@ -497,6 +497,59 @@
     .tradeoff strong { display: block; color: var(--sunrise); font-size: 0.95rem; }
     .tradeoff p { margin: 0.25rem 0 0; font-size: 0.82rem; color: var(--faint); }
 
+    .dash-panel {
+      margin-top: 1.1rem;
+      padding-top: 0.85rem;
+      border-top: 1px solid var(--line);
+    }
+    .dash-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      align-items: baseline;
+    }
+    .dash-pct {
+      font-family: Fraunces, Georgia, serif;
+      color: var(--sunrise);
+      font-size: 1.1rem;
+    }
+    .dash-row {
+      padding: 0.65rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .dash-row .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-weight: 700;
+      font-size: 0.92rem;
+    }
+    .dash-status {
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--sunrise);
+    }
+    .dash-status.booked { color: #8fd6c4; }
+    .dash-status.needed { color: var(--faint); }
+    .dash-status.skipped { color: var(--faint); text-decoration: line-through; }
+    .dash-actions {
+      margin-top: 0.35rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      font-size: 0.78rem;
+    }
+    .dash-actions button {
+      border: none;
+      background: none;
+      color: var(--sunrise);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 0;
+    }
+
     .postbook {
       margin-top: 1.6rem;
       padding-top: 1rem;
@@ -687,6 +740,7 @@
 
         <p class="family-chip" id="familyChip" hidden></p>
         <div class="watch-panel" id="watchPanel" hidden></div>
+        <div class="dash-panel" id="dashPanel" hidden></div>
         <p class="status" id="status" aria-live="polite"></p>
       </section>
 
@@ -793,6 +847,7 @@
       results: document.getElementById('results'),
       familyChip: document.getElementById('familyChip'),
       watchPanel: document.getElementById('watchPanel'),
+      dashPanel: document.getElementById('dashPanel'),
       sheet: document.getElementById('sheet'),
       sheetBody: document.getElementById('sheetBody'),
       sheetClose: document.getElementById('sheetClose'),
@@ -809,6 +864,7 @@
       watches: [],
       alerts: [],
       savingWatch: false,
+      plan: null,
     };
 
     function rememberFamily(size, ages) {
@@ -1009,6 +1065,149 @@
       } finally {
         state.savingWatch = false;
       }
+    }
+
+    function componentLabel(key, c) {
+      if (!c?.offer) return key;
+      const o = c.offer;
+      if (key === 'flight') return `${o.origin || ''} → ${o.destination || ''} · ${o.airlines?.[0] || ''} · ${o.price != null ? money(o.price, o.currency) : ''}`.trim();
+      if (key === 'hotel') return `${o.name || 'Hotel'} · ${o.price != null ? money(o.price, o.currency) : ''}`;
+      if (key === 'car') return `${o.vendor || ''} ${o.category || ''} · ${o.price != null ? money(o.price, o.currency) : ''}`.trim();
+      if (key === 'transfer') return `${o.mode || 'Transfer'} · ${o.price != null ? money(o.price, o.currency) : ''}`;
+      return key;
+    }
+
+    function renderDashPanel() {
+      const plan = state.plan;
+      if (!plan) {
+        els.dashPanel.hidden = true;
+        els.dashPanel.innerHTML = '';
+        return;
+      }
+      const comps = plan.components || {};
+      const keys = ['flight', 'hotel', 'car', 'transfer'].filter((k) => comps[k]);
+      els.dashPanel.hidden = false;
+      els.dashPanel.innerHTML = `
+        <div class="dash-head">
+          <div>
+            <p class="label">Trip dashboard</p>
+            <div class="route">${plan.title}</div>
+          </div>
+          <div class="dash-pct">${plan.progress?.pct || 0}% booked</div>
+        </div>
+        <p class="watch-meta">${plan.brief?.passengerSummary || (plan.brief?.passengers ? plan.brief.passengers + ' travelers' : '')}</p>
+        ${keys.map((key) => {
+          const c = comps[key];
+          return `
+            <div class="dash-row">
+              <div class="top">
+                <span>${key}</span>
+                <span class="dash-status ${c.status}">${c.status}</span>
+              </div>
+              <div class="watch-meta">${componentLabel(key, c) || 'Not chosen yet'}</div>
+              <div class="dash-actions">
+                ${c.status !== 'booked' && c.offer ? `<button type="button" data-plan-status="${key}:booked">Mark booked</button>` : ''}
+                ${c.status !== 'selected' && c.offer ? `<button type="button" data-plan-status="${key}:selected">Mark selected</button>` : ''}
+                ${c.status !== 'watching' && key === 'flight' ? `<button type="button" data-plan-status="${key}:watching">Watching</button>` : ''}
+                ${c.status !== 'skipped' ? `<button type="button" data-plan-status="${key}:skipped">Skip</button>` : `<button type="button" data-plan-status="${key}:needed">Unskip</button>`}
+                ${c.offer?.bookingLinks?.[0]?.url ? `<button type="button" data-plan-book="${key}">Book</button>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+        <div class="dash-actions" style="margin-top:.7rem">
+          <button type="button" id="clearPlanBtn">Clear dashboard</button>
+        </div>
+      `;
+
+      els.dashPanel.querySelectorAll('[data-plan-status]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const [component, status] = btn.dataset.planStatus.split(':');
+          patchPlanStatus(component, status);
+        });
+      });
+      els.dashPanel.querySelectorAll('[data-plan-book]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const c = state.plan?.components?.[btn.dataset.planBook];
+          const url = c?.offer?.bookingLinks?.[0]?.url;
+          if (url) window.open(url, '_blank');
+        });
+      });
+      document.getElementById('clearPlanBtn')?.addEventListener('click', clearActivePlan);
+    }
+
+    async function refreshPlan() {
+      try {
+        const deviceId = getDeviceId();
+        const res = await fetch(`/api/flights/plans/active?deviceId=${encodeURIComponent(deviceId)}`, {
+          headers: { 'X-Device-Id': deviceId },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          state.plan = data.plan || null;
+          renderDashPanel();
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    async function saveTripPlan() {
+      if (!state.result || state.result.status === 'needs_clarification') {
+        els.status.textContent = 'Search a trip first.';
+        return;
+      }
+      els.status.textContent = 'Saving trip dashboard…';
+      try {
+        const deviceId = getDeviceId();
+        const res = await fetch('/api/flights/plans', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+          body: JSON.stringify({
+            deviceId,
+            query: state.pendingQuery || els.query.value,
+            searchResult: state.result,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not save plan');
+        state.plan = data.plan;
+        renderDashPanel();
+        els.status.textContent = `Trip dashboard saved · ${data.plan.progress?.pct || 0}% booked`;
+      } catch (err) {
+        els.status.textContent = err.message || 'Could not save plan';
+      }
+    }
+
+    async function patchPlanStatus(component, status) {
+      if (!state.plan?.id) return;
+      try {
+        const deviceId = getDeviceId();
+        const res = await fetch(`/api/flights/plans/${state.plan.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+          body: JSON.stringify({ deviceId, component, status }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Update failed');
+        state.plan = data.plan;
+        renderDashPanel();
+        els.status.textContent = `${component} → ${status}`;
+      } catch (err) {
+        els.status.textContent = err.message || 'Update failed';
+      }
+    }
+
+    async function clearActivePlan() {
+      if (!state.plan?.id) return;
+      const deviceId = getDeviceId();
+      await fetch(`/api/flights/plans/${state.plan.id}?deviceId=${encodeURIComponent(deviceId)}`, {
+        method: 'DELETE',
+        headers: { 'X-Device-Id': deviceId },
+      });
+      state.plan = null;
+      renderDashPanel();
+      els.status.textContent = 'Dashboard cleared.';
     }
 
     function formatTripDate(iso) {
@@ -1334,6 +1533,7 @@
           Watch this trip · alert if under ${money(Math.max(1, Math.round((flights.buckets?.cheapest?.[0]?.price || flights.recommendation?.price || 0) * 0.92)), flights.buckets?.cheapest?.[0]?.currency || flights.recommendation?.currency)}
         </button>
         <button type="button" class="watch-cta" id="shareTripBtn">Share trip link + calendar</button>
+        <button type="button" class="watch-cta" id="savePlanBtn">Save to trip dashboard</button>
       `;
     }
 
@@ -1476,6 +1676,7 @@
 
       document.getElementById('saveWatchBtn')?.addEventListener('click', saveCurrentTripWatch);
       document.getElementById('shareTripBtn')?.addEventListener('click', shareCurrentTrip);
+      document.getElementById('savePlanBtn')?.addEventListener('click', saveTripPlan);
     }
 
     function currentPrefs() {
@@ -1665,6 +1866,7 @@
 
     renderFamilyChip();
     refreshWatches({ check: true });
+    refreshPlan();
   </script>
 </body>
 </html>

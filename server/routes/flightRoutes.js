@@ -24,6 +24,14 @@ const {
   buildTripIcs,
   parseBookingConfirmation,
 } = require('../services/sharedTrip');
+const {
+  createPlanFromSearch,
+  listPlans,
+  getPlan,
+  getActivePlan,
+  updatePlan,
+  deletePlan,
+} = require('../services/tripPlan');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -36,7 +44,7 @@ router.get('/health', (_req, res) => {
     models: MODELS,
     features: [
       'flights', 'cars', 'hotels', 'transfers', 'booking-links',
-      'live-fares', 'trip-watches', 'shared-trips', 'post-book', 'pre-trip-ops',
+      'live-fares', 'trip-watches', 'trip-plans', 'shared-trips', 'post-book', 'pre-trip-ops',
     ],
   });
 });
@@ -294,6 +302,68 @@ router.post('/postbook', (req, res) => {
     return res.status(400).json({ error: 'Paste a booking confirmation' });
   }
   res.json(parseBookingConfirmation(text));
+});
+
+/** Trip dashboard — one plan with flight/hotel/car/transfer status */
+router.get('/plans', (req, res) => {
+  const deviceId = req.query.deviceId || req.headers['x-device-id'];
+  if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
+  const active = getActivePlan(deviceId);
+  res.json({
+    active,
+    plans: listPlans(deviceId),
+  });
+});
+
+router.get('/plans/active', (req, res) => {
+  const deviceId = req.query.deviceId || req.headers['x-device-id'];
+  if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
+  res.json({ plan: getActivePlan(deviceId) });
+});
+
+router.get('/plans/:id', (req, res) => {
+  const deviceId = req.query.deviceId || req.headers['x-device-id'];
+  const plan = getPlan(req.params.id, deviceId || null);
+  if (!plan) return res.status(404).json({ error: 'Plan not found' });
+  res.json({ plan });
+});
+
+router.post('/plans', (req, res) => {
+  try {
+    const body = req.body || {};
+    const deviceId = body.deviceId || req.headers['x-device-id'];
+    const plan = body.searchResult
+      ? createPlanFromSearch(deviceId, body.searchResult, {
+        query: body.query,
+        includeHotel: body.includeHotel,
+        includeCar: body.includeCar,
+        includeTransfer: body.includeTransfer,
+      })
+      : createPlanFromSearch(deviceId, body, { query: body.query });
+    res.status(201).json({ plan });
+  } catch (error) {
+    logger.error('Create plan error:', error);
+    res.status(error.status || 500).json({ error: error.message || 'Could not save plan' });
+  }
+});
+
+router.patch('/plans/:id', (req, res) => {
+  try {
+    const deviceId = req.body?.deviceId || req.headers['x-device-id'];
+    if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
+    const plan = updatePlan(req.params.id, deviceId, req.body || {});
+    res.json({ plan });
+  } catch (error) {
+    res.status(error.status || 500).json({ error: error.message || 'Update failed' });
+  }
+});
+
+router.delete('/plans/:id', (req, res) => {
+  const deviceId = req.query.deviceId || req.body?.deviceId || req.headers['x-device-id'];
+  if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
+  const ok = deletePlan(req.params.id, deviceId);
+  if (!ok) return res.status(404).json({ error: 'Plan not found' });
+  res.json({ ok: true });
 });
 
 module.exports = router;

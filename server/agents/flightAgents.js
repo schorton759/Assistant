@@ -383,15 +383,15 @@ async function runSpecialistAgent({ name, modelRole, focus, offers }) {
   const top = offers.slice(0, 5).map(summarizeOffer);
   const localReason =
     name === 'PriceHunter'
-      ? `Lowest fare ${top[0]?.currency} ${top[0]?.price} on ${top[0]?.airlines?.join('/')}.`
+      ? `Lowest fare ${top[0]?.currency} ${top[0]?.price} on ${top[0]?.airlines?.join('/')} · ${top[0]?.stopsLabel} · ${top[0]?.durationLabel}.`
       : name === 'TimeOptimizer'
-        ? `Fastest itinerary ${top[0]?.durationLabel} with ${top[0]?.stops} stops.`
-        : `Best composite score balances price, time, comfort, and stops.`;
+        ? `Fastest door-to-door: ${top[0]?.durationLabel} on ${top[0]?.airlines?.join('/')} (${top[0]?.stopsLabel}) at ${top[0]?.currency} ${top[0]?.price}.`
+        : `Best overall: ${top[0]?.airlines?.join('/')} · ${top[0]?.stopsLabel} · ${top[0]?.durationLabel} · ${top[0]?.currency} ${top[0]?.price}.`;
 
   if (!hasNvidiaKey()) {
     return {
       agent: name,
-      model: 'local-fallback',
+      model: 'skyagent-local',
       picks: top,
       reasoning: localReason,
     };
@@ -400,16 +400,17 @@ async function runSpecialistAgent({ name, modelRole, focus, offers }) {
   try {
     const { data, model } = await generateJson({
       model: MODELS[modelRole] || MODELS.specialist,
-      system: `You are ${name}, a specialist AI travel agent. Focus: ${focus}. Be concise and practical.`,
+      system: `You are ${name}, a specialist AI travel agent. Focus: ${focus}. Be concise and practical. Only cite offers in the list.`,
       user: `Evaluate these flight offers and return JSON:
 {
   "pickIds": ["id1","id2","id3"],
-  "reasoning": "2-3 sentences explaining the top picks and tradeoffs"
+  "reasoning": "2 short sentences with concrete prices/times"
 }
 Offers:
 ${JSON.stringify(top, null, 2)}`,
-      maxTokens: 500,
-      temperature: 0.25,
+      maxTokens: 350,
+      temperature: 0.2,
+      timeout: 8000,
     });
 
     const idSet = new Set(data.pickIds || []);
@@ -427,17 +428,86 @@ ${JSON.stringify(top, null, 2)}`,
       reasoning: data.reasoning || localReason,
     };
   } catch (error) {
-    logger.warn(`${name} falling back:`, error.message);
+    logger.warn(`${name} using local ranking:`, error.message);
     return {
       agent: name,
-      model: 'local-fallback',
+      model: 'skyagent-local',
       picks: top,
-      reasoning: `${localReason} (NVIDIA unavailable: ${error.message})`,
+      reasoning: localReason,
     };
   }
 }
 
-async function runConciergeAgent({ brief, cheapest, shortest, best, agents }) {
+function buildSmartLocalConcierge({ brief, cheapest, shortest, best, tradeoffs = [], preTrip = null }) {
+  const pick = best[0] || cheapest[0] || shortest[0] || null;
+  const cheap = cheapest[0];
+  const fast = shortest[0];
+  const family = brief.passengers > 1 || (brief.ages || []).some((a) => a < 12);
+  const currency = pick?.currency || 'USD';
+
+  let headline = 'Solid pick for this trip';
+  let summary;
+
+  if (!pick) {
+    return {
+      headline: 'No offers yet',
+      recommendationId: null,
+      summary: 'I need a route and date to recommend anything.',
+      tips: preTrip?.tips?.slice(0, 3) || [],
+      reasoning: 'No candidate offers to synthesize.',
+    };
+  }
+
+  if (brief.preference === 'cheapest' && cheap) {
+    headline = `Cheapest: ${cheap.airlines?.[0] || 'fare'} · ${currency} ${cheap.price}`;
+    summary = `Go with ${cheap.airlines?.join('/')} at ${currency} ${cheap.price} (${cheap.stopsLabel}, ${cheap.durationLabel}).`
+      + (cheap.stops > 0 && family
+        ? ' With kids, weigh that connection against a nonstop even if it costs more.'
+        : ' Confirm bag fees before you lock it in.');
+  } else if (brief.preference === 'shortest' && fast) {
+    headline = `Fastest: ${fast.durationLabel}`;
+    summary = `${fast.airlines?.join('/')} gets you there in ${fast.durationLabel} (${fast.stopsLabel}) for ${currency} ${fast.price}.`
+      + (cheap && cheap.id !== fast.id
+        ? ` Cheapest alternative is ${currency} ${cheap.price} but takes ${cheap.durationLabel}.`
+        : '');
+  } else {
+    const delta = cheap && pick.id !== cheap.id ? Math.max(0, pick.price - cheap.price) : 0;
+    headline = family && pick.stops === 0
+      ? `Nonstop for the family · ${currency} ${pick.price}`
+      : `Best balance · ${currency} ${pick.price}`;
+    summary = `Take ${pick.airlines?.join('/')} — ${pick.stopsLabel}, ${pick.durationLabel}, ${currency} ${pick.price}`
+      + (brief.passengerSummary ? ` for ${brief.passengerSummary}` : '')
+      + '.'
+      + (delta
+        ? ` That's ${currency} ${delta} more than the cheapest (${cheap.airlines?.[0]} · ${cheap.stopsLabel}).`
+        : ' It also wins on price.')
+      + (fast && fast.id !== pick.id
+        ? ` Fastest option is ${fast.durationLabel} if time matters more.`
+        : '');
+  }
+
+  const tips = [];
+  if (tradeoffs[0]?.headline) tips.push(tradeoffs[0].headline);
+  if (preTrip?.tips?.length) tips.push(...preTrip.tips.slice(0, 2));
+  if (pick.stops > 0 && (preTrip?.layoverRisk === 'high' || preTrip?.layoverRisk === 'medium')) {
+    tips.push(`Connection risk is ${preTrip.layoverRisk} — leave margin with kids or checked bags.`);
+  }
+  if (!tips.length) {
+    tips.push('Watch the fare or book soon — good family routings move.', 'Reserve seats together right after purchase.');
+  }
+
+  return {
+    headline,
+    recommendationId: pick.id,
+    summary,
+    tips: tips.slice(0, 4),
+    reasoning: 'Local concierge synthesized rankings, tradeoffs, and pre-trip risk into one recommendation.',
+  };
+}
+
+async function runConciergeAgent({
+  brief, cheapest, shortest, best, agents, tradeoffs = [], preTrip = null,
+}) {
   const payload = {
     brief,
     cheapest: cheapest.slice(0, 3).map(summarizeOffer),
@@ -445,28 +515,15 @@ async function runConciergeAgent({ brief, cheapest, shortest, best, agents }) {
     best: best.slice(0, 3).map(summarizeOffer),
   };
 
-  const defaultRec = {
-    headline: 'Your AI travel desk recommends',
-    recommendationId: (best[0] || cheapest[0] || shortest[0])?.id || null,
-    summary:
-      brief.preference === 'cheapest'
-        ? 'Lean into the PriceHunter pick if budget is the priority; watch baggage fees on ultra-low-cost carriers.'
-        : brief.preference === 'shortest'
-          ? 'TimeOptimizer favors the quickest door-to-door option—often worth a modest premium.'
-          : 'RouteAdvisor balances fare, duration, stops, and comfort for the best overall journey.',
-    tips: [
-      'Compare nonstop premium vs one-stop savings before booking.',
-      'Morning departures usually leave more recovery buffer for connections.',
-      'Confirm baggage rules on budget airlines.',
-    ],
-  };
+  const local = buildSmartLocalConcierge({
+    brief, cheapest, shortest, best, tradeoffs, preTrip,
+  });
 
   if (!hasNvidiaKey()) {
     return {
       agent: 'Concierge',
-      model: 'local-fallback',
-      ...defaultRec,
-      reasoning: 'Synthesized locally from specialist rankings.',
+      model: 'skyagent-local',
+      ...local,
     };
   }
 
@@ -474,41 +531,53 @@ async function runConciergeAgent({ brief, cheapest, shortest, best, agents }) {
     const { data, model } = await generateJson({
       model: MODELS.concierge,
       system:
-        'You are Concierge, the lead AI travel agent for SkyAgent. Speak like a sharp 21st-century travel advisor—warm, decisive, no fluff. ONLY cite airlines and routings that appear in the candidate offers. Never invent nonstop service that is not in the offer path (e.g. do not claim Qatar flies Bermuda–London nonstop).',
+        'You are Concierge, SkyAgent\'s lead travel advisor. Warm, decisive, concrete. ONLY cite airlines/routings in the candidate offers. Never invent nonstops. Prefer one clear recommendation and name the price delta vs cheapest when relevant.',
       user: `Trip brief: ${JSON.stringify(brief)}
-Specialist outputs: ${JSON.stringify(
+Specialists: ${JSON.stringify(
         agents.map((a) => ({ agent: a.agent, reasoning: a.reasoning, top: a.picks?.[0]?.id })),
         null,
         2
       )}
-Candidate groups: ${JSON.stringify(payload, null, 2)}
+Tradeoffs: ${JSON.stringify(tradeoffs)}
+Pre-trip: ${JSON.stringify(preTrip?.tips?.slice(0, 3) || [])}
+Candidates: ${JSON.stringify(payload)}
+Local draft (improve or keep): ${JSON.stringify(local)}
 Return JSON:
 {
-  "headline": "short punchy headline",
-  "recommendationId": "offer id",
-  "summary": "3-5 sentence advice",
+  "headline": "short punchy headline with price or time",
+  "recommendationId": "offer id from candidates",
+  "summary": "3-4 concrete sentences",
   "tips": ["tip1","tip2","tip3"]
 }`,
-      maxTokens: 700,
-      temperature: 0.4,
+      maxTokens: 450,
+      temperature: 0.35,
+      timeout: 10000,
     });
+
+    // Guard: recommendation must exist in candidates
+    const allIds = new Set([
+      ...best.map((o) => o.id),
+      ...cheapest.map((o) => o.id),
+      ...shortest.map((o) => o.id),
+    ]);
+    const recId = allIds.has(data.recommendationId) ? data.recommendationId : local.recommendationId;
 
     return {
       agent: 'Concierge',
       model,
-      headline: data.headline || defaultRec.headline,
-      recommendationId: data.recommendationId || defaultRec.recommendationId,
-      summary: data.summary || defaultRec.summary,
-      tips: Array.isArray(data.tips) ? data.tips.slice(0, 5) : defaultRec.tips,
-      reasoning: 'NVIDIA Concierge synthesized specialist findings.',
+      headline: data.headline || local.headline,
+      recommendationId: recId,
+      summary: data.summary || local.summary,
+      tips: Array.isArray(data.tips) && data.tips.length ? data.tips.slice(0, 5) : local.tips,
+      reasoning: 'NVIDIA Concierge refined the local draft with specialist findings.',
     };
   } catch (error) {
-    logger.warn('Concierge falling back:', error.message);
+    logger.warn('Concierge using smart local synthesis:', error.message);
     return {
       agent: 'Concierge',
-      model: 'local-fallback',
-      ...defaultRec,
-      reasoning: `Local synthesis (NVIDIA unavailable: ${error.message})`,
+      model: 'skyagent-local',
+      ...local,
+      reasoning: `${local.reasoning} (NVIDIA skipped: ${error.message})`,
     };
   }
 }
@@ -702,17 +771,33 @@ async function searchFlights(input = {}) {
   ]);
 
   const agents = [intent, priceAgent, timeAgent, routeAgent];
+
+  // Draft tradeoffs/pre-trip from best pick so concierge can use them
+  const draftRec = bestOffers[0] || cheapestOffers[0] || shortestOffers[0];
+  const draftTradeoffs = buildTradeoffs({
+    recommendation: draftRec,
+    cheapest: cheapestOffers[0],
+    shortest: shortestOffers[0],
+  });
+  const draftPreTrip = buildPreTripOps({
+    brief,
+    recommendation: draftRec,
+    cheapest: cheapestOffers[0],
+  });
+
   const concierge = await runConciergeAgent({
     brief,
     cheapest: cheapestOffers,
     shortest: shortestOffers,
     best: bestOffers,
     agents,
+    tradeoffs: draftTradeoffs,
+    preTrip: draftPreTrip,
   });
   agents.push(concierge);
 
   const allById = Object.fromEntries(offers.map((o) => [o.id, o]));
-  const recommendation = allById[concierge.recommendationId] || bestOffers[0] || cheapestOffers[0];
+  const recommendation = allById[concierge.recommendationId] || draftRec;
   const tradeoffs = buildTradeoffs({
     recommendation,
     cheapest: cheapestOffers[0],
@@ -724,7 +809,6 @@ async function searchFlights(input = {}) {
     cheapest: cheapestOffers[0],
   });
 
-  // Enrich concierge tips with pre-trip ops when local/empty
   if (!concierge.tips?.length) {
     concierge.tips = preTrip.tips.slice(0, 3);
   }
@@ -766,4 +850,5 @@ module.exports = {
   rankCheapest,
   rankShortest,
   rankBest,
+  buildSmartLocalConcierge,
 };
