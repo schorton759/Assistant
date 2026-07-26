@@ -186,11 +186,15 @@ const CITY_TO_AIRPORTS = {
   NEW_YORK: ['JFK', 'EWR', 'LGA'],
   NYC: ['JFK', 'EWR', 'LGA'],
   LONDON: ['LHR', 'LGW'],
+  LON: ['LHR', 'LGW'],
   PARIS: ['CDG', 'ORY'],
+  PAR: ['CDG', 'ORY'],
   TOKYO: ['NRT', 'HND'],
+  TYO: ['NRT', 'HND'],
   LOS_ANGELES: ['LAX'],
   SAN_FRANCISCO: ['SFO'],
   CHICAGO: ['ORD', 'MDW'],
+  CHI: ['ORD', 'MDW'],
   MIAMI: ['MIA'],
   BOSTON: ['BOS'],
   SEATTLE: ['SEA'],
@@ -200,21 +204,35 @@ const CITY_TO_AIRPORTS = {
   SYDNEY: ['SYD'],
   BANGKOK: ['BKK'],
   SEOUL: ['ICN'],
+  SEL: ['ICN'],
   FRANKFURT: ['FRA'],
   AMSTERDAM: ['AMS'],
   BERMUDA: ['BDA'],
   HAMILTON: ['BDA'],
   TORONTO: ['YYZ'],
+  YTO: ['YYZ'],
   PHILADELPHIA: ['PHL'],
   CHARLOTTE: ['CLT'],
   ATLANTA: ['ATL'],
   DALLAS: ['DFW'],
   HOUSTON: ['IAH'],
+  HOU: ['IAH'],
   DENVER: ['DEN'],
   WASHINGTON: ['IAD'],
+  WAS: ['IAD'],
   MONTREAL: ['YUL'],
+  YMQ: ['YUL'],
   VANCOUVER: ['YVR'],
+  ROME: ['FCO'],
+  ROM: ['FCO'],
+  MILAN: ['MXP'],
+  MIL: ['MXP'],
 };
+
+/** IATA city codes that are not airports — always resolve to a primary airport. */
+const CITY_CODES = new Set([
+  'NYC', 'LON', 'PAR', 'TYO', 'CHI', 'SEL', 'YTO', 'YMQ', 'WAS', 'HOU', 'ROM', 'MIL',
+]);
 
 const REGION_OF = {
   us: new Set([
@@ -255,7 +273,15 @@ function seededRandom(seed) {
 function normalizeAirport(codeOrCity) {
   if (!codeOrCity) return null;
   const raw = String(codeOrCity).trim().toUpperCase();
+
+  // City IATA codes (LON, NYC, PAR…) are not airports — map to primary airport
+  if (CITY_CODES.has(raw) || CITY_TO_AIRPORTS[raw]) {
+    const mapped = CITY_TO_AIRPORTS[raw];
+    if (mapped) return mapped[0];
+  }
+
   if (/^[A-Z]{3}$/.test(raw)) return raw;
+
   const key = raw.replace(/[^A-Z]/g, ' ').replace(/\s+/g, '_');
   const mapped = CITY_TO_AIRPORTS[key] || CITY_TO_AIRPORTS[key.replace(/_/g, '')];
   if (mapped) return mapped[0];
@@ -372,13 +398,23 @@ function withLayoverMinutes(segments) {
 }
 
 const METROS = [
-  new Set(['LHR', 'LGW', 'STN']),
-  new Set(['JFK', 'EWR', 'LGA']),
-  new Set(['NRT', 'HND']),
-  new Set(['CDG', 'ORY']),
+  new Set(['LHR', 'LGW', 'STN', 'LTN', 'LON']),
+  new Set(['JFK', 'EWR', 'LGA', 'NYC']),
+  new Set(['NRT', 'HND', 'TYO']),
+  new Set(['CDG', 'ORY', 'PAR']),
+  new Set(['ORD', 'MDW', 'CHI']),
+  new Set(['IAH', 'HOU']),
+  new Set(['IAD', 'DCA', 'BWI', 'WAS']),
+  new Set(['FCO', 'CIA', 'ROM']),
+  new Set(['MXP', 'LIN', 'MIL']),
+  new Set(['YYZ', 'YTO']),
+  new Set(['YUL', 'YMQ']),
+  new Set(['ICN', 'GMP', 'SEL']),
 ];
 
 function sameMetro(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
   return METROS.some((set) => set.has(a) && set.has(b));
 }
 
@@ -406,9 +442,12 @@ function connectionHubs(origin, destination, airline) {
   const o = regionOf(origin);
   const d = regionOf(destination);
 
-  // Bermuda / Caribbean → Europe almost always via US or BA London gateway
+  // Bermuda / Caribbean → Europe almost always via US east-coast / Canada hubs.
+  // Never via LHR/LGW when London is already the destination — that invents LHR→LON ghosts.
   if (o === 'caribbean' || d === 'caribbean') {
-    push('JFK', 'EWR', 'BOS', 'ATL', 'PHL', 'CLT', 'YYZ', 'LGW', 'LHR');
+    push('JFK', 'EWR', 'BOS', 'ATL', 'PHL', 'CLT', 'YYZ');
+    if (d !== 'eu' && !sameMetro(destination, 'LHR')) push('LGW', 'LHR');
+    if (o !== 'eu' && !sameMetro(origin, 'LHR')) push('LGW', 'LHR');
   }
   if ((o === 'us' && d === 'eu') || (o === 'eu' && d === 'us')) {
     push('LHR', 'CDG', 'FRA', 'AMS', 'DUB', 'JFK', 'EWR', 'BOS', 'ORD', 'ATL');
@@ -643,6 +682,12 @@ function generateOffers({
     const enrichedSegments = withLayoverMinutes(segments);
     const stopInfo = stopsMeta(enrichedSegments);
 
+    // Never keep ghost city-code hops (e.g. BDA→LHR→LON) or same-metro legs
+    const badHop = enrichedSegments.some(
+      (seg) => sameMetro(seg.origin, seg.destination) || CITY_CODES.has(seg.destination) || CITY_CODES.has(seg.origin)
+    );
+    if (badHop) continue;
+
     const offer = {
       id: `sky-${from}${to}-${seed.toString(16)}-${offers.length}`,
       origin: from,
@@ -751,4 +796,5 @@ module.exports = {
   CITY_TO_AIRPORTS,
   hasNonstopMarket,
   carriersForNonstop,
+  sameMetro,
 };

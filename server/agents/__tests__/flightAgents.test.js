@@ -88,6 +88,30 @@ describe('SkyAgent flight agents', () => {
     }
   });
 
+  test('LON city code resolves to LHR and never invents LHR→LON hops', () => {
+    const { normalizeAirport } = require('../../services/flightCatalog');
+    expect(normalizeAirport('LON')).toBe('LHR');
+    expect(normalizeAirport('NYC')).toBe('JFK');
+
+    const offers = generateOffers({
+      origin: 'BDA',
+      destination: 'LON',
+      departDate: '2026-08-16',
+      passengers: 5,
+      ages: [40, 38, 10, 8, 5],
+    });
+    expect(offers.length).toBeGreaterThan(0);
+    for (const offer of offers) {
+      expect(offer.destination).toBe('LHR');
+      expect(offer.segments[offer.segments.length - 1].destination).toBe('LHR');
+      for (const seg of offer.segments) {
+        expect(seg.destination).not.toBe('LON');
+        expect(seg.origin).not.toBe('LON');
+      }
+    }
+    expect(offers.some((o) => o.stops === 0 && o.airlines[0] === 'British Airways')).toBe(true);
+  });
+
   test('localIntentParse reads month names into upcoming dates', () => {
     const brief = localIntentParse('best flight from Bermuda to London August 16');
     expect(brief.origin).toBe('BDA');

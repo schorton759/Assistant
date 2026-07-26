@@ -11,6 +11,7 @@
 const axios = require('axios');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+const { normalizeAirport, sameMetro } = require('./flightCatalog');
 
 // Travelpayouts docs publish this example token; replace with your affiliate token.
 const DOCS_DEMO_TOKEN = '321d6a221f8926b5ec41ae89a3b2ae7b';
@@ -172,8 +173,19 @@ function normalizeMarketOffer({
   const returnDate = returnAt
     ? String(returnAt).slice(0, 10)
     : (requestedReturnDate || null);
-  const origin = originAirport || originCity;
-  const destination = destinationAirport || destinationCity;
+
+  // Prefer real airports; never leave city codes like LON/NYC as the trip endpoint
+  const origin = normalizeAirport(originAirport)
+    || normalizeAirport(originCity)
+    || originAirport
+    || originCity;
+  const destination = normalizeAirport(destinationAirport)
+    || normalizeAirport(destinationCity)
+    || destinationAirport
+    || destinationCity;
+
+  // Reject nonsense like LHR → LON (same metro)
+  if (sameMetro(origin, destination)) return null;
   const arriveAt = duration ? addMinutes(departAt || `${departDate}T12:00:00Z`, duration) : null;
   const fn = flightNumber ? `${code}${flightNumber}` : `${code}000`;
 
