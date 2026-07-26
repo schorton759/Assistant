@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "SkyAgent",
+    "slug": "skyagent",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B1F33"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.skyagent.flights",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B1F33"
+      },
+      "package": "com.skyagent.flights"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "apiUrl": "http://localhost:3000"
+    }
+  }
+}

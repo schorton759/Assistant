@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#071525" />
+  <meta name="description" content="SkyAgent — AI travel desk. Cheapest, shortest, best flights." />
+  <title>SkyAgent</title>
+  <link rel="manifest" href="/skyagent/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/skyagent/icon-180.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #071525;
+      --deep: #0b3a4a;
+      --lagoon: #1a6b6b;
+      --mist: #e8f1f5;
+      --sunrise: #f4b460;
+      --soft: rgba(232, 241, 245, 0.78);
+      --faint: rgba(232, 241, 245, 0.48);
+      --line: rgba(232, 241, 245, 0.2);
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: "DM Sans", sans-serif;
+      color: var(--mist);
+      background: var(--navy);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    .sky {
+      min-height: 100dvh;
+      position: relative;
+      background:
+        radial-gradient(ellipse 80% 50% at 90% -10%, rgba(244, 180, 96, 0.18), transparent 55%),
+        radial-gradient(ellipse 60% 45% at -10% 90%, rgba(120, 210, 200, 0.16), transparent 50%),
+        linear-gradient(165deg, #071525 0%, #0b3a4a 48%, #1a6b6b 100%);
+    }
+
+    .wrap {
+      width: min(480px, 100%);
+      margin: 0 auto;
+      padding: calc(20px + var(--safe-top)) 22px calc(40px + var(--safe-bottom));
+    }
+
+    .hero {
+      opacity: 0;
+      transform: translateY(16px);
+      animation: rise 0.75s ease forwards;
+    }
+
+    .brand {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 700;
+      font-size: clamp(2.75rem, 12vw, 3.4rem);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      margin: 0;
+    }
+
+    .headline {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 600;
+      font-size: 1.4rem;
+      color: var(--sunrise);
+      margin: 0.55rem 0 0;
+    }
+
+    .subhead {
+      margin: 0.7rem 0 0;
+      font-size: 1rem;
+      line-height: 1.5;
+      color: var(--soft);
+      max-width: 22rem;
+    }
+
+    .ask {
+      margin-top: 1.75rem;
+      opacity: 0;
+      animation: rise 0.75s ease 0.12s forwards;
+    }
+
+    textarea, input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--line);
+      color: var(--mist);
+      font: inherit;
+      outline: none;
+      border-radius: 0;
+      -webkit-appearance: none;
+    }
+
+    .codes,
+    .dates,
+    .date-field,
+    .arrow { display: none; }
+
+    textarea {
+      min-height: 7rem;
+      resize: none;
+      font-size: 1.15rem;
+      line-height: 1.5;
+      padding: 0.75rem 0;
+    }
+
+    textarea::placeholder, input::placeholder {
+      color: rgba(232, 241, 245, 0.4);
+    }
+
+    .codes {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 0.65rem;
+      align-items: end;
+      margin-top: 1.1rem;
+    }
+
+    .codes input {
+      text-align: center;
+      font-weight: 700;
+      font-size: 1.35rem;
+      letter-spacing: 0.2em;
+      padding: 0.55rem 0;
+      text-transform: uppercase;
+    }
+
+    .arrow {
+      font-family: "Fraunces", Georgia, serif;
+      color: var(--sunrise);
+      font-size: 1.35rem;
+      padding-bottom: 0.45rem;
+    }
+
+    .dates {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+      margin-top: 1.15rem;
+    }
+
+    .date-field label {
+      display: block;
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-bottom: 0.35rem;
+    }
+
+    .date-field input[type="date"] {
+      color-scheme: dark;
+      font-size: 1rem;
+      font-weight: 500;
+      padding: 0.55rem 0;
+      min-height: 2.5rem;
+    }
+
+    .date-field input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.85) sepia(0.4) saturate(2) hue-rotate(5deg);
+      cursor: pointer;
+      opacity: 0.85;
+    }
+
+    .cta {
+      margin-top: 1.35rem;
+      width: 100%;
+      border: none;
+      background: var(--sunrise);
+      color: #0b1f33;
+      font-family: "DM Sans", sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      padding: 1rem 1.2rem;
+      cursor: pointer;
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+
+    .cta:disabled {
+      opacity: 0.7;
+      animation: none;
+    }
+
+    .prompts {
+      display: flex;
+      gap: 0.55rem;
+      overflow-x: auto;
+      margin-top: 1rem;
+      padding-bottom: 0.25rem;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .prompts::-webkit-scrollbar { display: none; }
+
+    .prompt {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--soft);
+      font: 500 0.8rem/1.2 "DM Sans", sans-serif;
+      padding: 0.55rem 0.75rem;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .status {
+      margin-top: 1rem;
+      min-height: 1.25rem;
+      font-size: 0.9rem;
+      color: #ffb4a8;
+    }
+
+    .results {
+      margin-top: 1.8rem;
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    .results.show {
+      animation: rise 0.45s ease forwards;
+    }
+
+    .label {
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin: 0 0 0.5rem;
+    }
+
+    .concierge-title {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.55rem;
+      line-height: 1.2;
+      margin: 0 0 0.55rem;
+    }
+
+    .concierge-body {
+      margin: 0 0 1rem;
+      color: var(--soft);
+      line-height: 1.5;
+      font-size: 0.95rem;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
+      margin: 1.25rem 0 0.4rem;
+    }
+
+    .tab {
+      border: none;
+      background: transparent;
+      color: var(--faint);
+      font: 500 0.95rem/1 "DM Sans", sans-serif;
+      padding: 0.7rem 0.2rem;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+    }
+    .tab.active {
+      color: var(--mist);
+      border-bottom-color: var(--sunrise);
+    }
+
+    .offer {
+      padding: 0.95rem 0;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      display: block;
+    }
+    .offer.featured {
+      background: rgba(244, 180, 96, 0.08);
+      margin: 0 -0.55rem;
+      padding-left: 0.55rem;
+      padding-right: 0.55rem;
+      width: calc(100% + 1.1rem);
+    }
+    .offer:active { opacity: 0.9; }
+
+    .offer-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      align-items: baseline;
+    }
+
+    .route {
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    .price {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.35rem;
+      color: var(--sunrise);
+      white-space: nowrap;
+    }
+
+    .meta, .soft {
+      margin-top: 0.25rem;
+      font-size: 0.9rem;
+      color: var(--soft);
+    }
+    .soft { color: var(--faint); font-size: 0.8rem; }
+    .stops-emph { color: var(--sunrise); font-weight: 500; }
+
+    .live-pill {
+      display: inline-block;
+      margin: 0.35rem 0 0.15rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--mist);
+      border: 1px solid rgba(244, 180, 96, 0.45);
+      padding: 0.15rem 0.45rem;
+    }
+    .live-pill.demo {
+      border-color: rgba(232, 228, 220, 0.2);
+      color: var(--faint);
+    }
+    .pricing-note {
+      margin: 0.35rem 0 0.85rem;
+      font-size: 0.82rem;
+      color: var(--faint);
+      line-height: 1.35;
+    }
+
+    .clarify {
+      margin-top: 1.2rem;
+      padding-top: 0.4rem;
+    }
+    .clarify-q {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.35rem;
+      margin: 0 0 0.85rem;
+      line-height: 1.25;
+    }
+    .clarify-opts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+    }
+    .clarify-opts button {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--mist);
+      font: 700 1rem/1 "DM Sans", sans-serif;
+      padding: 0.75rem 1rem;
+      min-width: 3rem;
+      cursor: pointer;
+    }
+
+    .age-list {
+      display: grid;
+      gap: 0.75rem;
+      margin: 0.85rem 0 1rem;
+    }
+    .age-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.75rem;
+      align-items: end;
+    }
+    .age-row label {
+      display: block;
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-bottom: 0.3rem;
+    }
+    .age-row input {
+      width: 5.5rem;
+      text-align: center;
+      font-weight: 700;
+      font-size: 1.15rem;
+      padding: 0.55rem 0;
+    }
+    .age-hint {
+      font-size: 0.8rem;
+      color: var(--faint);
+      margin: 0 0 0.85rem;
+      line-height: 1.4;
+    }
+
+    .family-chip {
+      margin-top: 0.85rem;
+      font-size: 0.8rem;
+      color: var(--faint);
+    }
+    .family-chip button,
+    .watch-actions button {
+      border: none;
+      background: none;
+      color: var(--sunrise);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .watch-panel {
+      margin-top: 1.1rem;
+      padding-top: 0.85rem;
+      border-top: 1px solid var(--line);
+    }
+    .watch-alert {
+      margin: 0 0 0.75rem;
+      padding: 0.55rem 0;
+      border-bottom: 1px solid rgba(244, 180, 96, 0.35);
+      color: var(--sunrise);
+      font-size: 0.9rem;
+      line-height: 1.35;
+    }
+    .watch-row {
+      padding: 0.65rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .watch-row .route {
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .watch-meta {
+      margin-top: 0.2rem;
+      font-size: 0.78rem;
+      color: var(--faint);
+    }
+    .watch-actions {
+      margin-top: 0.35rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.85rem;
+      font-size: 0.8rem;
+    }
+    .watch-hit .route { color: var(--sunrise); }
+
+    .watch-cta {
+      margin: 1rem 0 0.2rem;
+      width: 100%;
+      border: 1px solid rgba(244, 180, 96, 0.55);
+      background: transparent;
+      color: var(--sunrise);
+      font: inherit;
+      font-weight: 600;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+    }
+    .watch-cta:disabled { opacity: 0.55; cursor: default; }
+
+    .prefs {
+      margin-top: 0.9rem;
+      border-top: 1px solid var(--line);
+      padding-top: 0.65rem;
+      color: var(--faint);
+      font-size: 0.85rem;
+    }
+    .prefs summary { cursor: pointer; color: var(--soft); }
+    .pref-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 0.55rem;
+    }
+    .pref-row input[type="text"],
+    .pref-row input:not([type]),
+    .pref-row input[type="number"] {
+      width: 7rem;
+      background: rgba(7, 21, 37, 0.45);
+      border: 1px solid var(--line);
+      color: var(--mist);
+      padding: 0.4rem 0.5rem;
+      font: inherit;
+    }
+    .pref-row.check { justify-content: flex-start; gap: 0.45rem; }
+
+    .tradeoff {
+      margin: 0.55rem 0;
+      padding: 0.55rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .tradeoff strong { display: block; color: var(--sunrise); font-size: 0.95rem; }
+    .tradeoff p { margin: 0.25rem 0 0; font-size: 0.82rem; color: var(--faint); }
+
+    .dash-panel {
+      margin-top: 1.1rem;
+      padding-top: 0.85rem;
+      border-top: 1px solid var(--line);
+    }
+    .dash-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      align-items: baseline;
+    }
+    .dash-pct {
+      font-family: Fraunces, Georgia, serif;
+      color: var(--sunrise);
+      font-size: 1.1rem;
+    }
+    .dash-row {
+      padding: 0.65rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .dash-row .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-weight: 700;
+      font-size: 0.92rem;
+    }
+    .dash-status {
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--sunrise);
+    }
+    .dash-status.booked { color: #8fd6c4; }
+    .dash-status.needed { color: var(--faint); }
+    .dash-status.skipped { color: var(--faint); text-decoration: line-through; }
+    .dash-actions {
+      margin-top: 0.35rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      font-size: 0.78rem;
+    }
+    .dash-actions button {
+      border: none;
+      background: none;
+      color: var(--sunrise);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .postbook {
+      margin-top: 1.6rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+    }
+    .postbook textarea {
+      width: 100%;
+      margin-top: 0.45rem;
+      min-height: 4.5rem;
+      resize: vertical;
+      background: rgba(7, 21, 37, 0.45);
+      border: 1px solid var(--line);
+      color: var(--mist);
+      font: inherit;
+      padding: 0.7rem 0.75rem;
+    }
+
+    .sheet {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+    }
+    .sheet.open { display: block; }
+    .sheet-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(4, 12, 20, 0.72);
+    }
+    .sheet-panel {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      max-height: min(88dvh, 720px);
+      overflow: auto;
+      background: linear-gradient(180deg, #0c2a38 0%, #071525 100%);
+      border-top: 1px solid var(--line);
+      padding: 1.1rem 1.25rem calc(1.4rem + var(--safe-bottom));
+      animation: sheetUp 0.28s ease;
+    }
+    .sheet-handle {
+      width: 42px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(232,241,245,0.28);
+      margin: 0 auto 0.9rem;
+    }
+    .sheet-close {
+      float: right;
+      border: none;
+      background: transparent;
+      color: var(--faint);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .leg {
+      padding: 0.85rem 0;
+      border-bottom: 1px solid rgba(232,241,245,0.12);
+    }
+    .leg-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-weight: 700;
+    }
+    .layover {
+      margin: 0.35rem 0 0.15rem;
+      font-size: 0.8rem;
+      color: var(--sunrise);
+    }
+
+    .book-list {
+      display: grid;
+      gap: 0.55rem;
+      margin: 1rem 0 0.4rem;
+    }
+    .book-btn {
+      display: block;
+      text-decoration: none;
+      border: 1px solid var(--line);
+      color: var(--mist);
+      padding: 0.85rem 0.9rem;
+      background: rgba(244, 180, 96, 0.06);
+    }
+    .book-btn.primary {
+      background: var(--sunrise);
+      color: #0b1f33;
+      border-color: transparent;
+      font-weight: 700;
+    }
+    .book-btn strong { display: block; font-size: 1rem; }
+    .book-btn span {
+      display: block;
+      margin-top: 0.2rem;
+      font-size: 0.78rem;
+      opacity: 0.85;
+      font-weight: 400;
+    }
+    .book-note {
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+      color: var(--faint);
+      line-height: 1.4;
+    }
+
+    .agents { margin-top: 1.4rem; }
+    .agent {
+      padding: 0.8rem 0;
+      border-bottom: 1px solid rgba(232, 241, 245, 0.12);
+    }
+    .agent strong { font-size: 0.9rem; }
+    .agent span {
+      color: var(--faint);
+      font-weight: 400;
+    }
+    .agent p {
+      margin: 0.35rem 0 0;
+      color: var(--soft);
+      font-size: 0.85rem;
+      line-height: 1.45;
+    }
+
+    .footnote {
+      margin-top: 1.2rem;
+      font-size: 0.75rem;
+      color: var(--faint);
+    }
+
+    .install {
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+      font-size: 0.8rem;
+      color: var(--faint);
+      line-height: 1.45;
+    }
+
+    @keyframes rise {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.015); }
+    }
+    @keyframes sheetUp {
+      from { transform: translateY(24px); opacity: 0.6; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero, .ask, .results, .cta, .sheet-panel { animation: none !important; opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sky">
+    <main class="wrap">
+      <header class="hero">
+        <h1 class="brand">SkyAgent</h1>
+        <p class="headline">Your AI travel desk</p>
+        <p class="subhead">Ask once — flights, stays, cars, watches, and a shareable plan.</p>
+      </header>
+
+      <section class="ask">
+        <label class="label" for="query">Ask</label>
+        <textarea id="query" placeholder="Family trip Bermuda to London August 16…">Best flight from Bermuda to London for my family on August 16</textarea>
+
+        <button class="cta" id="searchBtn" type="button">Ask the agents</button>
+
+        <div class="prompts" id="prompts">
+          <button class="prompt" type="button" data-q="Best flight from Bermuda to London for my family on August 16">Family · Bermuda → London</button>
+          <button class="prompt" type="button" data-q="Plan my whole trip Bermuda to London August 16 returning August 23 — flights, hotel near South Kensington, rental car, and airport transfer">Whole trip plan</button>
+          <button class="prompt" type="button" data-q="Same trip but leave a day earlier">Same trip · day earlier</button>
+          <button class="prompt" type="button" data-q="Cheapest JFK to LHR leaving September 12, back September 20, and a rental car in London">Flight + rental car</button>
+        </div>
+
+        <details class="prefs" id="prefsBox">
+          <summary>Traveler prefs</summary>
+          <label class="pref-row">Home airport
+            <input id="prefHome" maxlength="3" placeholder="BDA" />
+          </label>
+          <label class="pref-row">Budget max (USD)
+            <input id="prefBudget" type="number" min="0" step="50" placeholder="optional" />
+          </label>
+          <label class="pref-row check"><input type="checkbox" id="prefRedEye" /> Avoid red-eyes</label>
+        </details>
+
+        <p class="family-chip" id="familyChip" hidden></p>
+        <div class="watch-panel" id="watchPanel" hidden></div>
+        <div class="dash-panel" id="dashPanel" hidden></div>
+        <p class="status" id="status" aria-live="polite"></p>
+      </section>
+
+      <section class="results" id="results" hidden></section>
+
+      <section class="postbook" id="postbook">
+        <p class="label">Already booked?</p>
+        <textarea id="confirmPaste" rows="3" placeholder="Paste confirmation / PNR / flight email text…"></textarea>
+        <button class="watch-cta" id="postbookBtn" type="button">Build reminders + calendar</button>
+        <div id="postbookOut" hidden></div>
+      </section>
+
+      <p class="install">
+        On iPhone: tap Share → <strong>Add to Home Screen</strong> for the full-screen app feel.
+      </p>
+    </main>
+  </div>
+
+  <div class="sheet" id="sheet" aria-hidden="true">
+    <div class="sheet-backdrop" id="sheetBackdrop"></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+      <div class="sheet-handle"></div>
+      <button type="button" class="sheet-close" id="sheetClose">Close</button>
+      <div id="sheetBody"></div>
+    </div>
+  </div>
+
+  <script>
+    const FAMILY_KEY = 'skyagent.familyProfile';
+    const DEVICE_KEY = 'skyagent.deviceId';
+    const PREFS_KEY = 'skyagent.travelerPrefs';
+    const LAST_TRIP_KEY = 'skyagent.lastTrip';
+
+    function getDeviceId() {
+      let id = localStorage.getItem(DEVICE_KEY);
+      if (!id) {
+        id = `dev_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+        localStorage.setItem(DEVICE_KEY, id);
+      }
+      return id;
+    }
+
+    function loadPrefs() {
+      try {
+        return JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') || {};
+      } catch {
+        return {};
+      }
+    }
+
+    function savePrefs(p) {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+    }
+
+    function loadLastTrip() {
+      try {
+        return JSON.parse(localStorage.getItem(LAST_TRIP_KEY) || 'null');
+      } catch {
+        return null;
+      }
+    }
+
+    function saveLastTrip(brief) {
+      if (!brief?.origin || !brief?.destination) return;
+      localStorage.setItem(LAST_TRIP_KEY, JSON.stringify({
+        origin: brief.origin,
+        destination: brief.destination,
+        departDate: brief.departDate,
+        returnDate: brief.returnDate || null,
+        passengers: brief.passengers,
+        ages: brief.ages || null,
+        cabin: brief.cabin || 'economy',
+      }));
+    }
+
+    const money = (n, c = 'USD') => {
+      try {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: c,
+          maximumFractionDigits: 0,
+        }).format(n);
+      } catch {
+        return `$${n}`;
+      }
+    };
+
+    function loadFamily() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(FAMILY_KEY) || 'null');
+        if (raw && Number(raw.size) > 0 && Array.isArray(raw.ages) && raw.ages.length === Number(raw.size)) {
+          return { size: Number(raw.size), ages: raw.ages.map(Number) };
+        }
+      } catch {
+        /* ignore */
+      }
+      return { size: null, ages: null };
+    }
+
+    const els = {
+      query: document.getElementById('query'),
+      btn: document.getElementById('searchBtn'),
+      status: document.getElementById('status'),
+      results: document.getElementById('results'),
+      familyChip: document.getElementById('familyChip'),
+      watchPanel: document.getElementById('watchPanel'),
+      dashPanel: document.getElementById('dashPanel'),
+      sheet: document.getElementById('sheet'),
+      sheetBody: document.getElementById('sheetBody'),
+      sheetClose: document.getElementById('sheetClose'),
+      sheetBackdrop: document.getElementById('sheetBackdrop'),
+    };
+
+    const savedFamily = loadFamily();
+    let state = {
+      result: null,
+      bucket: 'best',
+      pendingQuery: null,
+      familySize: savedFamily.size,
+      familyAges: savedFamily.ages,
+      watches: [],
+      alerts: [],
+      savingWatch: false,
+      plan: null,
+    };
+
+    function rememberFamily(size, ages) {
+      state.familySize = Number(size);
+      state.familyAges = ages.map(Number);
+      localStorage.setItem(FAMILY_KEY, JSON.stringify({ size: state.familySize, ages: state.familyAges }));
+      renderFamilyChip();
+    }
+
+    function clearFamily() {
+      state.familySize = null;
+      state.familyAges = null;
+      localStorage.removeItem(FAMILY_KEY);
+      renderFamilyChip();
+    }
+
+    function ageBand(age) {
+      if (age < 2) return 'infant';
+      if (age < 12) return 'child';
+      return 'adult';
+    }
+
+    function renderFamilyChip() {
+      if (!state.familySize || !state.familyAges?.length) {
+        els.familyChip.hidden = true;
+        els.familyChip.innerHTML = '';
+        return;
+      }
+      const summary = state.familyAges.map((a) => `${a}y`).join(', ');
+      els.familyChip.hidden = false;
+      els.familyChip.innerHTML = `Remembered family: <strong>${state.familySize}</strong> (${summary}) · <button type="button" id="clearFamily">clear</button>`;
+      document.getElementById('clearFamily')?.addEventListener('click', clearFamily);
+    }
+
+    function renderWatchPanel() {
+      const watches = state.watches || [];
+      const alerts = state.alerts || [];
+      if (!watches.length && !alerts.length) {
+        els.watchPanel.hidden = true;
+        els.watchPanel.innerHTML = '';
+        return;
+      }
+
+      els.watchPanel.hidden = false;
+      els.watchPanel.innerHTML = `
+        <p class="label">Saved trips</p>
+        ${alerts.map((a) => `<p class="watch-alert">${a.message}</p>`).join('')}
+        ${watches.map((w) => `
+          <div class="watch-row ${w.status === 'hit' ? 'watch-hit' : ''}">
+            <div class="route">${w.origin} → ${w.destination}${w.status === 'hit' ? ' · price hit' : ''}</div>
+            <div class="watch-meta">
+              ${formatTripDate(w.departDate)}${w.returnDate ? ` → ${formatTripDate(w.returnDate)}` : ''}
+              · ${w.passengers} travelers
+              · now ${money(w.lastPrice, w.currency)}
+              · alert ≤ ${money(w.targetPrice, w.currency)}
+              · saw ${money(w.baselinePrice, w.currency)}
+            </div>
+            <div class="watch-actions">
+              <button type="button" data-watch-search="${w.id}">Search again</button>
+              <button type="button" data-watch-check="${w.id}">Check price</button>
+              <button type="button" data-watch-delete="${w.id}">Remove</button>
+            </div>
+          </div>
+        `).join('')}
+      `;
+
+      els.watchPanel.querySelectorAll('[data-watch-search]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const w = state.watches.find((x) => x.id === btn.dataset.watchSearch);
+          if (!w) return;
+          const q = w.query || `Best flight from ${w.origin} to ${w.destination} on ${w.departDate}`
+            + (w.returnDate ? ` returning ${w.returnDate}` : '')
+            + ' for my family';
+          search({ query: q, passengers: w.passengers, ages: w.ages });
+        });
+      });
+      els.watchPanel.querySelectorAll('[data-watch-check]').forEach((btn) => {
+        btn.addEventListener('click', () => checkOneWatch(btn.dataset.watchCheck));
+      });
+      els.watchPanel.querySelectorAll('[data-watch-delete]').forEach((btn) => {
+        btn.addEventListener('click', () => removeWatch(btn.dataset.watchDelete));
+      });
+    }
+
+    async function refreshWatches({ check = false } = {}) {
+      const deviceId = getDeviceId();
+      try {
+        if (check) {
+          const res = await fetch('/api/flights/trips/check-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+            body: JSON.stringify({ deviceId }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            state.watches = (data.results || []).map((r) => r.watch).filter(Boolean);
+            state.alerts = data.alerts || [];
+            renderWatchPanel();
+            return;
+          }
+        }
+        const res = await fetch(`/api/flights/trips?deviceId=${encodeURIComponent(deviceId)}`, {
+          headers: { 'X-Device-Id': deviceId },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          state.watches = data.watches || [];
+          renderWatchPanel();
+        }
+      } catch {
+        /* offline / first boot */
+      }
+    }
+
+    async function checkOneWatch(id) {
+      els.status.textContent = 'Checking price…';
+      try {
+        const deviceId = getDeviceId();
+        const res = await fetch(`/api/flights/trips/${id}/check`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+          body: JSON.stringify({ deviceId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Check failed');
+        state.watches = state.watches.map((w) => (w.id === id ? data.watch : w));
+        if (data.alert) {
+          state.alerts = [data.alert, ...(state.alerts || [])].slice(0, 5);
+          els.status.textContent = data.alert.message;
+        } else {
+          els.status.textContent = `Still ${money(data.watch.lastPrice, data.watch.currency)} · alert at ${money(data.watch.targetPrice, data.watch.currency)}`;
+        }
+        renderWatchPanel();
+      } catch (err) {
+        els.status.textContent = err.message || 'Check failed';
+      }
+    }
+
+    async function removeWatch(id) {
+      const deviceId = getDeviceId();
+      try {
+        await fetch(`/api/flights/trips/${id}?deviceId=${encodeURIComponent(deviceId)}`, {
+          method: 'DELETE',
+          headers: { 'X-Device-Id': deviceId },
+        });
+        state.watches = state.watches.filter((w) => w.id !== id);
+        state.alerts = (state.alerts || []).filter((a) => !String(a.message || '').includes(id));
+        renderWatchPanel();
+        els.status.textContent = 'Watch removed.';
+      } catch (err) {
+        els.status.textContent = err.message || 'Could not remove watch';
+      }
+    }
+
+    async function saveCurrentTripWatch() {
+      const flights = flightPayload(state.result);
+      if (!flights?.brief?.origin || !flights?.brief?.destination) {
+        els.status.textContent = 'Search a flight trip first.';
+        return;
+      }
+      const cheapest = flights.buckets?.cheapest?.[0] || flights.recommendation;
+      if (!cheapest?.price) {
+        els.status.textContent = 'No price to watch yet.';
+        return;
+      }
+
+      const target = Math.max(1, Math.round(cheapest.price * 0.92));
+      state.savingWatch = true;
+      els.status.textContent = 'Saving trip watch…';
+      try {
+        const deviceId = getDeviceId();
+        const res = await fetch('/api/flights/trips', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+          body: JSON.stringify({
+            deviceId,
+            origin: flights.brief.origin,
+            destination: flights.brief.destination,
+            departDate: flights.brief.departDate,
+            returnDate: flights.brief.returnDate || null,
+            passengers: flights.brief.passengers,
+            ages: flights.brief.ages,
+            cabin: flights.brief.cabin || 'economy',
+            query: state.pendingQuery || els.query.value,
+            baselinePrice: cheapest.price,
+            targetPrice: target,
+            currency: cheapest.currency || 'USD',
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not save');
+        state.watches = [data.watch, ...state.watches.filter((w) => w.id !== data.watch.id)];
+        renderWatchPanel();
+        els.status.textContent = `Watching ${flights.brief.origin} → ${flights.brief.destination}. Alert at ${money(target)} (now ${money(cheapest.price)}).`;
+        render();
+      } catch (err) {
+        els.status.textContent = err.message || 'Could not save watch';
+      } finally {
+        state.savingWatch = false;
+      }
+    }
+
+    function componentLabel(key, c) {
+      if (!c?.offer) return key;
+      const o = c.offer;
+      if (key === 'flight') return `${o.origin || ''} → ${o.destination || ''} · ${o.airlines?.[0] || ''} · ${o.price != null ? money(o.price, o.currency) : ''}`.trim();
+      if (key === 'hotel') return `${o.name || 'Hotel'} · ${o.price != null ? money(o.price, o.currency) : ''}`;
+      if (key === 'car') return `${o.vendor || ''} ${o.category || ''} · ${o.price != null ? money(o.price, o.currency) : ''}`.trim();
+      if (key === 'transfer') return `${o.mode || 'Transfer'} · ${o.price != null ? money(o.price, o.currency) : ''}`;
+      return key;
+    }
+
+    function renderDashPanel() {
+      const plan = state.plan;
+      if (!plan) {
+        els.dashPanel.hidden = true;
+        els.dashPanel.innerHTML = '';
+        return;
+      }
+      const comps = plan.components || {};
+      const keys = ['flight', 'hotel', 'car', 'transfer'].filter((k) => comps[k]);
+      els.dashPanel.hidden = false;
+      els.dashPanel.innerHTML = `
+        <div class="dash-head">
+          <div>
+            <p class="label">Trip dashboard</p>
+            <div class="route">${plan.title}</div>
+          </div>
+          <div class="dash-pct">${plan.progress?.pct || 0}% booked</div>
+        </div>
+        <p class="watch-meta">${plan.brief?.passengerSummary || (plan.brief?.passengers ? plan.brief.passengers + ' travelers' : '')}</p>
+        ${keys.map((key) => {
+          const c = comps[key];
+          return `
+            <div class="dash-row">
+              <div class="top">
+                <span>${key}</span>
+                <span class="dash-status ${c.status}">${c.status}</span>
+              </div>
+              <div class="watch-meta">${componentLabel(key, c) || 'Not chosen yet'}</div>
+              <div class="dash-actions">
+                ${c.status !== 'booked' && c.offer ? `<button type="button" data-plan-status="${key}:booked">Mark booked</button>` : ''}
+                ${c.status !== 'selected' && c.offer ? `<button type="button" data-plan-status="${key}:selected">Mark selected</button>` : ''}
+                ${c.status !== 'watching' && key === 'flight' ? `<button type="button" data-plan-status="${key}:watching">Watching</button>` : ''}
+                ${c.status !== 'skipped' ? `<button type="button" data-plan-status="${key}:skipped">Skip</button>` : `<button type="button" data-plan-status="${key}:needed">Unskip</button>`}
+                ${c.offer?.bookingLinks?.[0]?.url ? `<button type="button" data-plan-book="${key}">Book</button>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+        <div class="dash-actions" style="margin-top:.7rem">
+          <button type="button" id="clearPlanBtn">Clear dashboard</button>
+        </div>
+      `;
+
+      els.dashPanel.querySelectorAll('[data-plan-status]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const [component, status] = btn.dataset.planStatus.split(':');
+          patchPlanStatus(component, status);
+        });
+      });
+      els.dashPanel.querySelectorAll('[data-plan-book]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const c = state.plan?.components?.[btn.dataset.planBook];
+          const url = c?.offer?.bookingLinks?.[0]?.url;
+          if (url) window.open(url, '_blank');
+        });
+      });
+      document.getElementById('clearPlanBtn')?.addEventListener('click', clearActivePlan);
+    }
+
+    async function refreshPlan() {
+      try {
+        const deviceId = getDeviceId();
+        const res = await fetch(`/api/flights/plans/active?deviceId=${encodeURIComponent(deviceId)}`, {
+          headers: { 'X-Device-Id': deviceId },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          state.plan = data.plan || null;
+          renderDashPanel();
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    async function saveTripPlan() {
+      if (!state.result || state.result.status === 'needs_clarification') {
+        els.status.textContent = 'Search a trip first.';
+        return;
+      }
+      els.status.textContent = 'Saving trip dashboard…';
+      try {
+        const deviceId = getDeviceId();
+        const res = await fetch('/api/flights/plans', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+          body: JSON.stringify({
+            deviceId,
+            query: state.pendingQuery || els.query.value,
+            searchResult: state.result,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not save plan');
+        state.plan = data.plan;
+        renderDashPanel();
+        els.status.textContent = `Trip dashboard saved · ${data.plan.progress?.pct || 0}% booked`;
+      } catch (err) {
+        els.status.textContent = err.message || 'Could not save plan';
+      }
+    }
+
+    async function patchPlanStatus(component, status) {
+      if (!state.plan?.id) return;
+      try {
+        const deviceId = getDeviceId();
+        const res = await fetch(`/api/flights/plans/${state.plan.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+          body: JSON.stringify({ deviceId, component, status }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Update failed');
+        state.plan = data.plan;
+        renderDashPanel();
+        els.status.textContent = `${component} → ${status}`;
+      } catch (err) {
+        els.status.textContent = err.message || 'Update failed';
+      }
+    }
+
+    async function clearActivePlan() {
+      if (!state.plan?.id) return;
+      const deviceId = getDeviceId();
+      await fetch(`/api/flights/plans/${state.plan.id}?deviceId=${encodeURIComponent(deviceId)}`, {
+        method: 'DELETE',
+        headers: { 'X-Device-Id': deviceId },
+      });
+      state.plan = null;
+      renderDashPanel();
+      els.status.textContent = 'Dashboard cleared.';
+    }
+
+    function formatTripDate(iso) {
+      if (!iso) return '';
+      try {
+        return new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', {
+          weekday: 'short', month: 'short', day: 'numeric',
+        });
+      } catch {
+        return iso;
+      }
+    }
+
+    function formatTime(iso) {
+      try {
+        return new Date(iso).toLocaleTimeString('en-US', {
+          hour: 'numeric', minute: '2-digit', timeZone: 'UTC',
+        }) + ' UTC';
+      } catch {
+        return iso;
+      }
+    }
+
+    function flightPayload(data) {
+      if (!data) return null;
+      if (data.type === 'travel') return data.flights;
+      if (data.type === 'cars') return null;
+      return data;
+    }
+
+    function carPayload(data) {
+      if (!data) return null;
+      if (data.type === 'travel') return data.cars;
+      if (data.type === 'cars') return data;
+      return null;
+    }
+
+    function offerById(id) {
+      const data = state.result;
+      const flights = flightPayload(data);
+      const cars = carPayload(data);
+      if (flights?.recommendation?.id === id) return flights.recommendation;
+      if (cars?.recommendation?.id === id) return cars.recommendation;
+      for (const key of ['cheapest', 'shortest', 'best']) {
+        const hit = (flights?.buckets?.[key] || []).find((o) => o.id === id);
+        if (hit) return hit;
+      }
+      const carHit = (cars?.offers || []).find((o) => o.id === id);
+      if (carHit) return carHit;
+      return null;
+    }
+
+    function bookingButtons(links = []) {
+      if (!links.length) return '';
+      return `
+        <div class="book-list">
+          ${links.map((link) => `
+            <a class="book-btn ${link.primary ? 'primary' : ''}" href="${link.url}" target="_blank" rel="noopener noreferrer">
+              <strong>${link.label}</strong>
+              <span>${link.blurb || ''}</span>
+            </a>
+          `).join('')}
+        </div>
+        <p class="book-note">We prefill route, dates, and traveler mix where the site allows. Names, payment, and final seats are completed on their site — airlines don’t let apps finish checkout for you.</p>
+      `;
+    }
+
+    function offerHtml(offer, featured) {
+      const tripDates = offer.returnDate
+        ? `${formatTripDate(offer.departDate)} → ${formatTripDate(offer.returnDate)}`
+        : formatTripDate(offer.departDate);
+      const paxBits = [];
+      if (offer.passengers > 1) paxBits.push(`total for ${offer.passengers}`);
+      if (offer.passengerSummary) {
+        const parts = [];
+        if (offer.passengerSummary.adult) parts.push(`${offer.passengerSummary.adult} adult${offer.passengerSummary.adult > 1 ? 's' : ''}`);
+        if (offer.passengerSummary.child) parts.push(`${offer.passengerSummary.child} child${offer.passengerSummary.child > 1 ? 'ren' : ''}`);
+        if (offer.passengerSummary.infant) parts.push(`${offer.passengerSummary.infant} infant${offer.passengerSummary.infant > 1 ? 's' : ''}`);
+        if (parts.length) paxBits.push(parts.join(', '));
+      }
+      const pax = paxBits.length ? ` · ${paxBits.join(' · ')}` : '';
+      const liveMark = offer.live
+        ? '<span class="live-pill">Live market</span>'
+        : '';
+      return `
+        <button type="button" class="offer ${featured ? 'featured' : ''}" data-offer-id="${offer.id}">
+          <div class="offer-top">
+            <div class="route">${offer.origin} → ${offer.destination}</div>
+            <div class="price">${money(offer.price, offer.currency)}</div>
+          </div>
+          ${liveMark}
+          <div class="meta">${tripDates ? tripDates + ' · ' : ''}${offer.durationLabel} · <span class="stops-emph">${offer.stopsLabel}</span> · ${offer.airlines.join(', ')}</div>
+          <div class="soft">Comfort ${offer.comfortScore}${offer.baggageIncluded ? ' · bags included' : ' · bags extra'}${pax} · tap for details & booking</div>
+        </button>
+      `;
+    }
+
+    function carHtml(offer, featured) {
+      return `
+        <button type="button" class="offer ${featured ? 'featured' : ''}" data-offer-id="${offer.id}">
+          <div class="offer-top">
+            <div class="route">${offer.vendor} · ${offer.category}</div>
+            <div class="price">${money(offer.price, offer.currency)}</div>
+          </div>
+          <div class="meta">${offer.location} · ${formatTripDate(offer.pickupDate)} → ${formatTripDate(offer.dropoffDate)} · ${offer.days} day${offer.days > 1 ? 's' : ''}</div>
+          <div class="soft">${offer.example} · ${offer.seats} seats · ${offer.transmission} · ${money(offer.dailyPrice)}/day · tap to book</div>
+        </button>
+      `;
+    }
+
+    function openDetails(offer) {
+      if (!offer) return;
+
+      if (offer.type === 'car') {
+        els.sheetBody.innerHTML = `
+          <p class="label">Car details</p>
+          <h2 class="concierge-title" id="sheetTitle">${offer.vendor} · ${offer.category}</h2>
+          <p class="concierge-body">
+            ${money(offer.price, offer.currency)} total · ${money(offer.dailyPrice)}/day · ${offer.days} days
+          </p>
+          <div class="leg">
+            <div class="meta">${offer.example}</div>
+            <div class="soft">${offer.location}</div>
+            <div class="soft">${formatTripDate(offer.pickupDate)} → ${formatTripDate(offer.dropoffDate)}</div>
+            <div class="soft">${offer.seats} seats · ${offer.bags} bags · ${offer.transmission}${offer.unlimitedMileage ? ' · unlimited miles' : ''}</div>
+          </div>
+          <p class="label">Continue to book</p>
+          ${bookingButtons(offer.bookingLinks || [])}
+        `;
+        els.sheet.classList.add('open');
+        els.sheet.setAttribute('aria-hidden', 'false');
+        return;
+      }
+
+      const legs = (offer.segments || []).map((seg) => `
+        ${seg.layoverLabel ? `<div class="layover">Layover in ${seg.origin} · ${seg.layoverLabel}</div>` : ''}
+        <div class="leg">
+          <div class="leg-top">
+            <span>${seg.origin} → ${seg.destination}</span>
+            <span>${seg.durationLabel}</span>
+          </div>
+          <div class="meta">${seg.airlineName} ${seg.flightNumber}</div>
+          <div class="soft">${formatTime(seg.departAt)} → ${formatTime(seg.arriveAt)}</div>
+        </div>
+      `).join('');
+
+      els.sheetBody.innerHTML = `
+        <p class="label">Flight details</p>
+        <h2 class="concierge-title" id="sheetTitle">${offer.origin} → ${offer.destination}</h2>
+        <p class="concierge-body">
+          ${money(offer.price, offer.currency)}${offer.passengers > 1 ? ` total for ${offer.passengers}` : ''}
+          · ${offer.durationLabel} · <span class="stops-emph">${offer.stopsLabel}</span>
+        </p>
+        ${offer.live ? '<span class="live-pill">Live market fare</span>' : '<span class="live-pill demo">Demo catalog</span>'}
+        ${offer.pricingNote ? `<p class="pricing-note">${offer.pricingNote}</p>` : ''}
+        ${legs}
+        <p class="label">Continue to book</p>
+        ${bookingButtons(offer.bookingLinks || [])}
+      `;
+      els.sheet.classList.add('open');
+      els.sheet.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeDetails() {
+      els.sheet.classList.remove('open');
+      els.sheet.setAttribute('aria-hidden', 'true');
+    }
+
+    function renderAgeForm({ passengerCount, pendingQuery, question, hints }) {
+      const count = Number(passengerCount) || state.familySize || 2;
+      const prior = state.familyAges?.length === count ? state.familyAges : [];
+      els.results.hidden = false;
+      els.results.classList.add('show');
+      els.results.innerHTML = `
+        <div class="clarify">
+          <p class="label">Quick question</p>
+          <p class="clarify-q">${question || `What are the ages of the ${count} travelers?`}</p>
+          <p class="age-hint">${(hints || ['Adult: 12+', 'Child: 2–11', 'Infant: under 2']).join(' · ')}</p>
+          <form id="ageForm" class="age-list">
+            ${Array.from({ length: count }, (_, i) => `
+              <div class="age-row">
+                <div>
+                  <label for="age-${i}">Traveler ${i + 1}</label>
+                  <div class="soft" id="band-${i}">${prior[i] != null ? ageBand(prior[i]) : 'enter age'}</div>
+                </div>
+                <input id="age-${i}" name="age" type="number" inputmode="numeric" min="0" max="119" required
+                  value="${prior[i] != null ? prior[i] : ''}" placeholder="age" />
+              </div>
+            `).join('')}
+            <button class="cta" type="submit">Save ages & search</button>
+          </form>
+        </div>
+      `;
+
+      els.results.querySelectorAll('input[name="age"]').forEach((input, i) => {
+        input.addEventListener('input', () => {
+          const band = document.getElementById(`band-${i}`);
+          const val = Number(input.value);
+          band.textContent = Number.isFinite(val) && input.value !== '' ? ageBand(val) : 'enter age';
+        });
+      });
+
+      document.getElementById('ageForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const ages = [...els.results.querySelectorAll('input[name="age"]')].map((el) => Number(el.value));
+        if (ages.some((a) => !Number.isFinite(a) || a < 0 || a > 119)) {
+          els.status.textContent = 'Enter a valid age for each traveler.';
+          return;
+        }
+        rememberFamily(count, ages);
+        search({
+          query: pendingQuery || els.query.value,
+          passengers: count,
+          ages,
+        });
+      });
+    }
+
+    function renderClarification(data) {
+      const type = data.clarification?.type;
+      if (type === 'passenger_ages') {
+        renderAgeForm({
+          passengerCount: data.clarification.passengerCount || data.brief?.passengers,
+          pendingQuery: data.pendingQuery,
+          question: data.clarification.question,
+          hints: data.clarification.hints,
+        });
+        return;
+      }
+
+      const q = data.clarification?.question || 'How many people are flying?';
+      const opts = data.clarification?.options || [2, 3, 4, 5, 6];
+      els.results.hidden = false;
+      els.results.classList.add('show');
+      els.results.innerHTML = `
+        <div class="clarify">
+          <p class="label">Quick question</p>
+          <p class="clarify-q">${q}</p>
+          <div class="clarify-opts">
+            ${opts.map((n) => `<button type="button" data-pax="${n}">${n}</button>`).join('')}
+          </div>
+        </div>
+      `;
+      els.results.querySelectorAll('[data-pax]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const n = Number(btn.dataset.pax);
+          state.familySize = n;
+          // Next: collect ages before searching
+          renderAgeForm({
+            passengerCount: n,
+            pendingQuery: data.pendingQuery || els.query.value,
+            question: `What are the ages of the ${n} travelers?`,
+          });
+        });
+      });
+    }
+
+    function renderTradeoffs(tradeoffs = []) {
+      if (!tradeoffs.length) return '';
+      return `
+        <p class="label" style="margin-top:1.2rem">Honest tradeoffs</p>
+        ${tradeoffs.map((t) => `
+          <div class="tradeoff">
+            <strong>${t.headline}</strong>
+            <p>${t.detail || ''}</p>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    function renderPreTrip(preTrip) {
+      if (!preTrip?.tips?.length) return '';
+      return `
+        <p class="label" style="margin-top:1.2rem">Pre-trip ops</p>
+        <p class="pricing-note">Layover risk: ${preTrip.layoverRisk || 'n/a'}</p>
+        <ul class="soft" style="padding-left:1.1rem;margin:.4rem 0 0">
+          ${preTrip.tips.map((t) => `<li style="margin:.25rem 0">${t}</li>`).join('')}
+        </ul>
+      `;
+    }
+
+    function renderFlightsBlock(flights) {
+      if (!flights || flights.status === 'needs_clarification') return '';
+      const concierge = (flights.agents || []).find((a) => a.agent === 'Concierge') || {};
+      const offers = flights.buckets?.[state.bucket] || [];
+      const recId = flights.recommendation?.id;
+      const understood = [
+        flights.brief?.origin && flights.brief?.destination
+          ? `${flights.brief.origin} → ${flights.brief.destination}`
+          : null,
+        flights.brief?.returnDate
+          ? `${formatTripDate(flights.brief.departDate)} → ${formatTripDate(flights.brief.returnDate)}`
+          : formatTripDate(flights.brief?.departDate),
+        flights.brief?.passengerSummary || null,
+      ].filter(Boolean).join(' · ');
+
+      const live = flights.pricing?.mode === 'live';
+      const pricingPill = live
+        ? '<span class="live-pill">Live market prices</span>'
+        : '<span class="live-pill demo">Demo catalog</span>';
+      const pricingNote = flights.pricing?.note
+        ? `<p class="pricing-note">${flights.pricing.note}</p>`
+        : '';
+
+      return `
+        <p class="label">Flights${understood ? ` · ${understood}` : ''}</p>
+        ${pricingPill}
+        ${pricingNote}
+        <h2 class="concierge-title">${concierge.headline || 'Your AI travel desk recommends'}</h2>
+        <p class="concierge-body">${concierge.summary || ''}</p>
+        ${flights.recommendation ? offerHtml(flights.recommendation, true) : ''}
+        ${renderTradeoffs(flights.tradeoffs || [])}
+        ${renderPreTrip(flights.preTrip)}
+        <div class="tabs">
+          ${['cheapest', 'shortest', 'best'].map((key) => `
+            <button class="tab ${state.bucket === key ? 'active' : ''}" data-bucket="${key}" type="button">
+              ${key[0].toUpperCase()}${key.slice(1)}
+            </button>
+          `).join('')}
+        </div>
+        ${offers.map((o) => offerHtml(o, o.id === recId)).join('')}
+        <button type="button" class="watch-cta" id="saveWatchBtn">
+          Watch this trip · alert if under ${money(Math.max(1, Math.round((flights.buckets?.cheapest?.[0]?.price || flights.recommendation?.price || 0) * 0.92)), flights.buckets?.cheapest?.[0]?.currency || flights.recommendation?.currency)}
+        </button>
+        <button type="button" class="watch-cta" id="shareTripBtn">Share trip link + calendar</button>
+        <button type="button" class="watch-cta" id="savePlanBtn">Save to trip dashboard</button>
+      `;
+    }
+
+    function renderCarsBlock(cars) {
+      if (!cars) return '';
+      const concierge = (cars.agents || []).find((a) => a.agent === 'CarConcierge') || {};
+      const understood = [
+        cars.brief?.location,
+        cars.brief?.pickupDate && cars.brief?.dropoffDate
+          ? `${formatTripDate(cars.brief.pickupDate)} → ${formatTripDate(cars.brief.dropoffDate)}`
+          : null,
+      ].filter(Boolean).join(' · ');
+
+      return `
+        <p class="label" style="margin-top:1.6rem">Cars${understood ? ` · ${understood}` : ''}</p>
+        <h2 class="concierge-title">${concierge.headline || 'Car desk recommendation'}</h2>
+        <p class="concierge-body">${concierge.summary || ''}</p>
+        ${cars.recommendation ? carHtml(cars.recommendation, true) : ''}
+        ${(cars.offers || []).map((o) => carHtml(o, o.id === cars.recommendation?.id)).join('')}
+      `;
+    }
+
+    function renderHotelsBlock(hotels) {
+      if (!hotels) return '';
+      const agent = (hotels.agents || [])[0] || {};
+      return `
+        <p class="label" style="margin-top:1.6rem">Hotels</p>
+        <h2 class="concierge-title">${agent.headline || 'Stay options'}</h2>
+        <p class="concierge-body">${agent.summary || ''}</p>
+        ${(hotels.offers || []).map((o) => `
+          <button type="button" class="offer ${o.id === hotels.recommendation?.id ? 'featured' : ''}" data-offer-id="${o.id}">
+            <div class="offer-top">
+              <div class="route">${o.name}</div>
+              <div class="price">${money(o.price, o.currency)}</div>
+            </div>
+            <div class="meta">${o.area} · ${o.stars}★ · ${o.nights} nights · ${o.rooms} room${o.rooms > 1 ? 's' : ''}</div>
+            <div class="soft">${formatTripDate(o.checkIn)} → ${formatTripDate(o.checkOut)} · tap to book</div>
+          </button>
+        `).join('')}
+      `;
+    }
+
+    function renderTransfersBlock(transfers) {
+      if (!transfers) return '';
+      const agent = (transfers.agents || [])[0] || {};
+      return `
+        <p class="label" style="margin-top:1.6rem">Transfers</p>
+        <h2 class="concierge-title">${agent.headline || 'Airport transfer'}</h2>
+        <p class="concierge-body">${agent.summary || ''}</p>
+        ${(transfers.offers || []).map((o) => `
+          <button type="button" class="offer ${o.id === transfers.recommendation?.id ? 'featured' : ''}" data-offer-id="${o.id}">
+            <div class="offer-top">
+              <div class="route">${o.mode}</div>
+              <div class="price">${money(o.price, o.currency)}</div>
+            </div>
+            <div class="meta">${o.vendor} · ${o.durationLabel} · ${o.seats === 99 ? 'shared' : o.seats + ' seats'}</div>
+            <div class="soft">${o.location} arrival · tap for details</div>
+          </button>
+        `).join('')}
+      `;
+    }
+
+    function hotelOrTransferById(id) {
+      const data = state.result;
+      for (const block of [data?.hotels, data?.transfers, carPayload(data)]) {
+        if (!block) continue;
+        if (block.recommendation?.id === id) return block.recommendation;
+        const hit = (block.offers || []).find((o) => o.id === id);
+        if (hit) return hit;
+      }
+      return null;
+    }
+
+    function renderAgents(agents = []) {
+      if (!agents.length) return '';
+      return `
+        <div class="agents">
+          <p class="label">Agent desk</p>
+          ${agents.map((a) => `
+            <div class="agent">
+              <strong>${a.agent}<span> · ${a.model}</span></strong>
+              <p>${a.reasoning || a.summary || ''}</p>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function render() {
+      const data = state.result;
+      if (!data) return;
+
+      if (data.status === 'needs_clarification') {
+        renderClarification(data);
+        return;
+      }
+
+      const flights = flightPayload(data);
+      const cars = carPayload(data);
+      const hotels = data.hotels || (data.type === 'hotels' ? data : null);
+      const transfers = data.transfers || (data.type === 'transfers' ? data : null);
+      const agents = [
+        ...((flights && flights.agents) || data.agents || []),
+        ...((cars && cars.agents) || []),
+        ...((hotels && hotels.agents) || []),
+        ...((transfers && transfers.agents) || []),
+      ];
+
+      els.results.hidden = false;
+      els.results.classList.remove('show');
+      void els.results.offsetWidth;
+      els.results.classList.add('show');
+
+      els.results.innerHTML = `
+        ${flights ? renderFlightsBlock(flights) : ''}
+        ${hotels ? renderHotelsBlock(hotels) : ''}
+        ${transfers ? renderTransfersBlock(transfers) : ''}
+        ${cars ? renderCarsBlock(cars) : ''}
+        ${!flights ? renderTradeoffs(data.tradeoffs || []) : ''}
+        ${!flights ? renderPreTrip(data.preTrip) : ''}
+        ${renderAgents(agents)}
+        <p class="footnote">
+          SkyAgent remembers your family, watches prices, plans hotels/cars/transfers, and shares a trip link.
+          Live fares when available — always confirm on the booking site.
+        </p>
+      `;
+
+      els.results.querySelectorAll('[data-bucket]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.bucket = btn.dataset.bucket;
+          render();
+        });
+      });
+
+      els.results.querySelectorAll('[data-offer-id]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          openDetails(offerById(btn.dataset.offerId) || hotelOrTransferById(btn.dataset.offerId));
+        });
+      });
+
+      document.getElementById('saveWatchBtn')?.addEventListener('click', saveCurrentTripWatch);
+      document.getElementById('shareTripBtn')?.addEventListener('click', shareCurrentTrip);
+      document.getElementById('savePlanBtn')?.addEventListener('click', saveTripPlan);
+    }
+
+    function currentPrefs() {
+      return {
+        homeAirport: (document.getElementById('prefHome')?.value || '').trim().toUpperCase() || null,
+        budgetMax: Number(document.getElementById('prefBudget')?.value) || null,
+        avoidRedEyes: Boolean(document.getElementById('prefRedEye')?.checked),
+      };
+    }
+
+    async function shareCurrentTrip() {
+      const data = state.result;
+      const flights = flightPayload(data);
+      if (!flights?.recommendation) {
+        els.status.textContent = 'Search a trip first.';
+        return;
+      }
+      els.status.textContent = 'Creating share link…';
+      try {
+        const res = await fetch('/api/flights/share', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            brief: flights.brief,
+            recommendation: flights.recommendation,
+            cheapest: flights.buckets?.cheapest?.[0],
+            tradeoffs: flights.tradeoffs,
+            preTrip: flights.preTrip,
+            hotels: data.hotels || null,
+            cars: carPayload(data),
+            transfers: data.transfers || null,
+          }),
+        });
+        const out = await res.json();
+        if (!res.ok) throw new Error(out.error || 'Share failed');
+        const url = `${location.origin}${out.url}`;
+        try { await navigator.clipboard.writeText(url); } catch { /* ignore */ }
+        els.status.textContent = `Share link copied: ${url}`;
+        window.open(out.url, '_blank');
+      } catch (err) {
+        els.status.textContent = err.message || 'Share failed';
+      }
+    }
+
+    async function search(override = {}) {
+      const query = (override.query ?? els.query.value).trim();
+      if (!query) {
+        els.status.textContent = 'Tell me where and when you want to fly.';
+        return;
+      }
+
+      if (override.query) els.query.value = override.query;
+      state.pendingQuery = query;
+
+      const passengers = override.passengers || state.familySize || undefined;
+      const ages = override.ages || state.familyAges || undefined;
+      const prefs = currentPrefs();
+      savePrefs(prefs);
+
+      els.status.textContent = '';
+      els.btn.disabled = true;
+      els.btn.textContent = 'Agents working…';
+
+      try {
+        const body = { query, message: query, prefs, ...prefs };
+        if (passengers) body.passengers = passengers;
+        if (ages?.length) body.ages = ages;
+        const lastTrip = loadLastTrip();
+        if (lastTrip) body.lastTrip = lastTrip;
+
+        const res = await fetch('/api/flights/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Search failed');
+
+        state.result = data;
+        const brief = data.brief || data.flights?.brief;
+        if (brief) saveLastTrip(brief);
+        if (['cheapest', 'shortest', 'best'].includes(brief?.preference)) {
+          state.bucket = brief.preference;
+        }
+        render();
+      } catch (err) {
+        els.status.textContent = err.message || 'Search failed';
+      } finally {
+        els.btn.disabled = false;
+        els.btn.textContent = 'Ask the agents';
+      }
+    }
+
+    async function runPostbook() {
+      const text = document.getElementById('confirmPaste')?.value || '';
+      const out = document.getElementById('postbookOut');
+      if (!text.trim()) {
+        els.status.textContent = 'Paste a confirmation first.';
+        return;
+      }
+      els.status.textContent = 'Reading confirmation…';
+      try {
+        const res = await fetch('/api/flights/postbook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        const p = data.parsed || {};
+        out.hidden = false;
+        out.innerHTML = `
+          <p class="label" style="margin-top:1rem">Parsed</p>
+          <p class="soft">${[p.pnr && `PNR ${p.pnr}`, p.flightNumber, p.origin && p.destination ? `${p.origin} → ${p.destination}` : '', p.departDate].filter(Boolean).join(' · ') || 'Limited details found'}</p>
+          <p class="label" style="margin-top:.8rem">Reminders</p>
+          <ul class="soft" style="padding-left:1.1rem">${(data.reminders || []).map((r) => `<li>${r.when}: ${r.text}</li>`).join('')}</ul>
+          <p class="label" style="margin-top:.8rem">Tips</p>
+          <ul class="soft" style="padding-left:1.1rem">${(data.tips || []).map((t) => `<li>${t}</li>`).join('')}</ul>
+          <button type="button" class="watch-cta" id="dlIcsBtn">Download calendar (.ics)</button>
+        `;
+        document.getElementById('dlIcsBtn')?.addEventListener('click', () => {
+          const blob = new Blob([data.ics], { type: 'text/calendar' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'skyagent-booking.ics';
+          a.click();
+        });
+        els.status.textContent = 'Reminders ready.';
+      } catch (err) {
+        els.status.textContent = err.message || 'Could not parse confirmation';
+      }
+    }
+
+    // openDetails: support hotels/transfers
+    const _openDetails = openDetails;
+    openDetails = function(offer) {
+      if (!offer) return;
+      if (offer.type === 'hotel') {
+        els.sheetBody.innerHTML = `
+          <p class="label">Hotel details</p>
+          <h2 class="concierge-title" id="sheetTitle">${offer.name}</h2>
+          <p class="concierge-body">${money(offer.price, offer.currency)} · ${offer.nights} nights · ${offer.rooms} room(s)</p>
+          <div class="leg"><div class="meta">${offer.area} · ${offer.stars}★</div>
+          <div class="soft">${formatTripDate(offer.checkIn)} → ${formatTripDate(offer.checkOut)}</div></div>
+          <p class="label">Continue to book</p>
+          ${bookingButtons(offer.bookingLinks || [])}
+        `;
+        els.sheet.classList.add('open');
+        els.sheet.setAttribute('aria-hidden', 'false');
+        return;
+      }
+      if (offer.type === 'transfer') {
+        els.sheetBody.innerHTML = `
+          <p class="label">Transfer details</p>
+          <h2 class="concierge-title" id="sheetTitle">${offer.mode}</h2>
+          <p class="concierge-body">${money(offer.price, offer.currency)} · ${offer.durationLabel} · ${offer.vendor}</p>
+          <div class="leg"><div class="soft">${offer.location} · ${offer.passengers} travelers</div></div>
+          <p class="label">Continue to book</p>
+          ${bookingButtons(offer.bookingLinks || [])}
+        `;
+        els.sheet.classList.add('open');
+        els.sheet.setAttribute('aria-hidden', 'false');
+        return;
+      }
+      return _openDetails(offer);
+    };
+
+    els.btn.addEventListener('click', () => search());
+    document.getElementById('prompts').addEventListener('click', (e) => {
+      const btn = e.target.closest('.prompt');
+      if (!btn) return;
+      search({ query: btn.dataset.q });
+    });
+    document.getElementById('postbookBtn')?.addEventListener('click', runPostbook);
+    els.sheetClose.addEventListener('click', closeDetails);
+    els.sheetBackdrop.addEventListener('click', closeDetails);
+
+    (function initPrefs() {
+      const p = loadPrefs();
+      const home = document.getElementById('prefHome');
+      const budget = document.getElementById('prefBudget');
+      const red = document.getElementById('prefRedEye');
+      if (home && p.homeAirport) home.value = p.homeAirport;
+      if (budget && p.budgetMax) budget.value = p.budgetMax;
+      if (red && p.avoidRedEyes) red.checked = true;
+    })();
+
+    renderFamilyChip();
+    refreshWatches({ check: true });
+    refreshPlan();
+  </script>
+</body>
+</html>
