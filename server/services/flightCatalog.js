@@ -487,13 +487,23 @@ function generateOffers({
   returnDate = null,
   cabin = 'economy',
   passengers = 1,
+  ages = null,
   count = 10,
 }) {
   const from = normalizeAirport(origin);
   const to = normalizeAirport(destination);
   if (!from || !to) throw new Error('Origin and destination are required');
 
-  const seed = hashString(`${from}|${to}|${departDate}|${returnDate || ''}|${cabin}|${passengers}|v2`);
+  const ageList = Array.isArray(ages) && ages.length
+    ? ages.map((a) => Number(a)).filter((a) => Number.isFinite(a))
+    : Array(Math.max(1, passengers)).fill(30);
+  const fareUnits = ageList.reduce((sum, age) => {
+    if (age < 2) return sum + 0.1; // lap infant style
+    if (age < 12) return sum + 0.75;
+    return sum + 1;
+  }, 0) || Math.max(1, passengers);
+
+  const seed = hashString(`${from}|${to}|${departDate}|${returnDate || ''}|${cabin}|${ageList.join(',')}|v3`);
   const rand = seededRandom(seed);
   const dist = distanceScore(from, to);
   const basePrice = Math.round((180 + dist * 210) * (cabin === 'business' ? 3.2 : cabin === 'premium' ? 1.7 : 1));
@@ -621,7 +631,7 @@ function generateOffers({
     if (stops === 2) price *= 0.78 + rand() * 0.1;
     if (['BA', 'VS', 'SQ', 'EK', 'QR'].includes(airline.code)) price *= 1.08;
     if (['B6'].includes(airline.code)) price *= 0.9;
-    price = Math.round(price * passengers);
+    price = Math.round(price * fareUnits);
 
     const comfort =
       airline.vibe.includes('premium') || airline.vibe.includes('award')
@@ -640,7 +650,12 @@ function generateOffers({
       departDate,
       returnDate,
       cabin,
-      passengers,
+      passengers: ageList.length,
+      ages: ageList,
+      passengerSummary: ageList.map((age) => (age < 2 ? 'infant' : age < 12 ? 'child' : 'adult')).reduce((acc, t) => {
+        acc[t] = (acc[t] || 0) + 1;
+        return acc;
+      }, {}),
       price,
       currency: 'USD',
       stops: stopInfo.stops,
@@ -708,7 +723,7 @@ function generateOffers({
       returnDate,
       cabin,
       passengers,
-      price: Math.round(basePrice * 1.1 * passengers),
+      price: Math.round(basePrice * 1.1 * fareUnits),
       currency: 'USD',
       stops: stopInfo.stops,
       stopAirports: stopInfo.stopAirports,
@@ -717,6 +732,8 @@ function generateOffers({
       durationLabel: formatDuration(leg1 + layover + leg2),
       airlines: [...new Set(segments.map((s) => s.airlineName))],
       segments,
+      ages: ageList,
+      passengers: ageList.length,
       comfortScore: 3.8,
       baggageIncluded: true,
       refundable: false,

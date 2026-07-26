@@ -439,6 +439,10 @@ Return JSON:
 
 async function searchFlights(input = {}) {
   const rememberedPassengers = Number(input.passengers);
+  const agesInput = Array.isArray(input.ages)
+    ? input.ages.map((a) => Number(a)).filter((a) => Number.isFinite(a) && a >= 0 && a < 120)
+    : null;
+
   const form = {
     origin: input.origin,
     destination: input.destination,
@@ -447,6 +451,7 @@ async function searchFlights(input = {}) {
     passengers: Number.isFinite(rememberedPassengers) && rememberedPassengers > 0
       ? rememberedPassengers
       : undefined,
+    ages: agesInput && agesInput.length ? agesInput : undefined,
     cabin: input.cabin || 'economy',
     preference: input.preference || 'best',
   };
@@ -491,6 +496,43 @@ async function searchFlights(input = {}) {
 
   brief.passengers = Number(brief.passengers) || 1;
 
+  const familyTrip = Boolean(brief.familyMentioned || brief.passengers > 1);
+  const hasAges = Boolean(form.ages && form.ages.length === brief.passengers);
+
+  if (familyTrip && brief.passengers > 1 && !hasAges) {
+    return {
+      status: 'needs_clarification',
+      clarification: {
+        type: 'passenger_ages',
+        question: `What are the ages of the ${brief.passengers} travelers? (fares differ for adults, children, and infants)`,
+        passengerCount: brief.passengers,
+        hints: [
+          'Adult: 12+',
+          'Child: 2–11',
+          'Infant: under 2',
+        ],
+      },
+      brief,
+      nvidiaEnabled: hasNvidiaKey(),
+      agents: [intent],
+      recommendation: null,
+      buckets: { cheapest: [], shortest: [], best: [] },
+      offerCount: 0,
+      generatedAt: new Date().toISOString(),
+      pendingQuery: input.query || input.message || '',
+    };
+  }
+
+  const ages = hasAges ? form.ages : Array(brief.passengers).fill(30);
+  const travelers = ages.map((age, i) => ({
+    index: i + 1,
+    age,
+    type: age < 2 ? 'infant' : age < 12 ? 'child' : 'adult',
+  }));
+  brief.ages = ages;
+  brief.travelers = travelers;
+  brief.passengerSummary = summarizeTravelers(travelers);
+
   const offers = generateOffers({
     origin: brief.origin,
     destination: brief.destination,
@@ -498,6 +540,7 @@ async function searchFlights(input = {}) {
     returnDate: brief.returnDate,
     cabin: brief.cabin,
     passengers: brief.passengers,
+    ages,
   });
 
   const cheapestOffers = rankCheapest(offers);
@@ -508,7 +551,7 @@ async function searchFlights(input = {}) {
     runSpecialistAgent({
       name: 'PriceHunter',
       modelRole: 'specialist',
-      focus: 'minimize total fare while flagging junk-fee traps',
+      focus: 'minimize total fare while flagging junk-fee traps; consider adult/child/infant mix',
       offers: cheapestOffers,
     }),
     runSpecialistAgent({
@@ -520,7 +563,7 @@ async function searchFlights(input = {}) {
     runSpecialistAgent({
       name: 'RouteAdvisor',
       modelRole: 'specialist',
-      focus: 'best overall route quality: value, time, comfort, reliability',
+      focus: 'best overall route quality: value, time, comfort, reliability for this family mix',
       offers: bestOffers,
     }),
   ]);
@@ -552,6 +595,16 @@ async function searchFlights(input = {}) {
     offerCount: offers.length,
     generatedAt: new Date().toISOString(),
   };
+}
+
+function summarizeTravelers(travelers) {
+  const counts = { adult: 0, child: 0, infant: 0 };
+  for (const t of travelers) counts[t.type] += 1;
+  const parts = [];
+  if (counts.adult) parts.push(`${counts.adult} adult${counts.adult > 1 ? 's' : ''}`);
+  if (counts.child) parts.push(`${counts.child} child${counts.child > 1 ? 'ren' : ''}`);
+  if (counts.infant) parts.push(`${counts.infant} infant${counts.infant > 1 ? 's' : ''}`);
+  return parts.join(', ') || '1 adult';
 }
 
 module.exports = {

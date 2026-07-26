@@ -343,6 +343,40 @@
       min-width: 3rem;
       cursor: pointer;
     }
+
+    .age-list {
+      display: grid;
+      gap: 0.75rem;
+      margin: 0.85rem 0 1rem;
+    }
+    .age-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.75rem;
+      align-items: end;
+    }
+    .age-row label {
+      display: block;
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-bottom: 0.3rem;
+    }
+    .age-row input {
+      width: 5.5rem;
+      text-align: center;
+      font-weight: 700;
+      font-size: 1.15rem;
+      padding: 0.55rem 0;
+    }
+    .age-hint {
+      font-size: 0.8rem;
+      color: var(--faint);
+      margin: 0 0 0.85rem;
+      line-height: 1.4;
+    }
+
     .family-chip {
       margin-top: 0.85rem;
       font-size: 0.8rem;
@@ -505,14 +539,31 @@
   </div>
 
   <script>
-    const FAMILY_KEY = 'skyagent.familySize';
+    const FAMILY_KEY = 'skyagent.familyProfile';
+
     const money = (n, c = 'USD') => {
       try {
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: c, maximumFractionDigits: 0 }).format(n);
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: c,
+          maximumFractionDigits: 0,
+        }).format(n);
       } catch {
         return `$${n}`;
       }
     };
+
+    function loadFamily() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(FAMILY_KEY) || 'null');
+        if (raw && Number(raw.size) > 0 && Array.isArray(raw.ages) && raw.ages.length === Number(raw.size)) {
+          return { size: Number(raw.size), ages: raw.ages.map(Number) };
+        }
+      } catch {
+        /* ignore */
+      }
+      return { size: null, ages: null };
+    }
 
     const els = {
       query: document.getElementById('query'),
@@ -526,33 +577,44 @@
       sheetBackdrop: document.getElementById('sheetBackdrop'),
     };
 
+    const savedFamily = loadFamily();
     let state = {
       result: null,
       bucket: 'best',
       pendingQuery: null,
-      familySize: Number(localStorage.getItem(FAMILY_KEY)) || null,
+      familySize: savedFamily.size,
+      familyAges: savedFamily.ages,
     };
 
-    function rememberFamily(n) {
-      state.familySize = Number(n);
-      localStorage.setItem(FAMILY_KEY, String(n));
+    function rememberFamily(size, ages) {
+      state.familySize = Number(size);
+      state.familyAges = ages.map(Number);
+      localStorage.setItem(FAMILY_KEY, JSON.stringify({ size: state.familySize, ages: state.familyAges }));
       renderFamilyChip();
     }
 
     function clearFamily() {
       state.familySize = null;
+      state.familyAges = null;
       localStorage.removeItem(FAMILY_KEY);
       renderFamilyChip();
     }
 
+    function ageBand(age) {
+      if (age < 2) return 'infant';
+      if (age < 12) return 'child';
+      return 'adult';
+    }
+
     function renderFamilyChip() {
-      if (!state.familySize) {
+      if (!state.familySize || !state.familyAges?.length) {
         els.familyChip.hidden = true;
         els.familyChip.innerHTML = '';
         return;
       }
+      const summary = state.familyAges.map((a) => `${a}y`).join(', ');
       els.familyChip.hidden = false;
-      els.familyChip.innerHTML = `Remembered family size: <strong>${state.familySize}</strong> · <button type="button" id="clearFamily">clear</button>`;
+      els.familyChip.innerHTML = `Remembered family: <strong>${state.familySize}</strong> (${summary}) · <button type="button" id="clearFamily">clear</button>`;
       document.getElementById('clearFamily')?.addEventListener('click', clearFamily);
     }
 
@@ -592,7 +654,16 @@
       const tripDates = offer.returnDate
         ? `${formatTripDate(offer.departDate)} → ${formatTripDate(offer.returnDate)}`
         : formatTripDate(offer.departDate);
-      const pax = offer.passengers > 1 ? ` · total for ${offer.passengers}` : '';
+      const paxBits = [];
+      if (offer.passengers > 1) paxBits.push(`total for ${offer.passengers}`);
+      if (offer.passengerSummary) {
+        const parts = [];
+        if (offer.passengerSummary.adult) parts.push(`${offer.passengerSummary.adult} adult${offer.passengerSummary.adult > 1 ? 's' : ''}`);
+        if (offer.passengerSummary.child) parts.push(`${offer.passengerSummary.child} child${offer.passengerSummary.child > 1 ? 'ren' : ''}`);
+        if (offer.passengerSummary.infant) parts.push(`${offer.passengerSummary.infant} infant${offer.passengerSummary.infant > 1 ? 's' : ''}`);
+        if (parts.length) paxBits.push(parts.join(', '));
+      }
+      const pax = paxBits.length ? ` · ${paxBits.join(' · ')}` : '';
       return `
         <button type="button" class="offer ${featured ? 'featured' : ''}" data-offer-id="${offer.id}">
           <div class="offer-top">
@@ -638,7 +709,68 @@
       els.sheet.setAttribute('aria-hidden', 'true');
     }
 
+    function renderAgeForm({ passengerCount, pendingQuery, question, hints }) {
+      const count = Number(passengerCount) || state.familySize || 2;
+      const prior = state.familyAges?.length === count ? state.familyAges : [];
+      els.results.hidden = false;
+      els.results.classList.add('show');
+      els.results.innerHTML = `
+        <div class="clarify">
+          <p class="label">Quick question</p>
+          <p class="clarify-q">${question || `What are the ages of the ${count} travelers?`}</p>
+          <p class="age-hint">${(hints || ['Adult: 12+', 'Child: 2–11', 'Infant: under 2']).join(' · ')}</p>
+          <form id="ageForm" class="age-list">
+            ${Array.from({ length: count }, (_, i) => `
+              <div class="age-row">
+                <div>
+                  <label for="age-${i}">Traveler ${i + 1}</label>
+                  <div class="soft" id="band-${i}">${prior[i] != null ? ageBand(prior[i]) : 'enter age'}</div>
+                </div>
+                <input id="age-${i}" name="age" type="number" inputmode="numeric" min="0" max="119" required
+                  value="${prior[i] != null ? prior[i] : ''}" placeholder="age" />
+              </div>
+            `).join('')}
+            <button class="cta" type="submit">Save ages & search</button>
+          </form>
+        </div>
+      `;
+
+      els.results.querySelectorAll('input[name="age"]').forEach((input, i) => {
+        input.addEventListener('input', () => {
+          const band = document.getElementById(`band-${i}`);
+          const val = Number(input.value);
+          band.textContent = Number.isFinite(val) && input.value !== '' ? ageBand(val) : 'enter age';
+        });
+      });
+
+      document.getElementById('ageForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const ages = [...els.results.querySelectorAll('input[name="age"]')].map((el) => Number(el.value));
+        if (ages.some((a) => !Number.isFinite(a) || a < 0 || a > 119)) {
+          els.status.textContent = 'Enter a valid age for each traveler.';
+          return;
+        }
+        rememberFamily(count, ages);
+        search({
+          query: pendingQuery || els.query.value,
+          passengers: count,
+          ages,
+        });
+      });
+    }
+
     function renderClarification(data) {
+      const type = data.clarification?.type;
+      if (type === 'passenger_ages') {
+        renderAgeForm({
+          passengerCount: data.clarification.passengerCount || data.brief?.passengers,
+          pendingQuery: data.pendingQuery,
+          question: data.clarification.question,
+          hints: data.clarification.hints,
+        });
+        return;
+      }
+
       const q = data.clarification?.question || 'How many people are flying?';
       const opts = data.clarification?.options || [2, 3, 4, 5, 6];
       els.results.hidden = false;
@@ -654,8 +786,14 @@
       `;
       els.results.querySelectorAll('[data-pax]').forEach((btn) => {
         btn.addEventListener('click', () => {
-          rememberFamily(btn.dataset.pax);
-          search({ query: data.pendingQuery || els.query.value, passengers: Number(btn.dataset.pax) });
+          const n = Number(btn.dataset.pax);
+          state.familySize = n;
+          // Next: collect ages before searching
+          renderAgeForm({
+            passengerCount: n,
+            pendingQuery: data.pendingQuery || els.query.value,
+            question: `What are the ages of the ${n} travelers?`,
+          });
         });
       });
     }
@@ -679,7 +817,7 @@
         data.brief?.returnDate
           ? `${formatTripDate(data.brief.departDate)} → ${formatTripDate(data.brief.returnDate)}`
           : formatTripDate(data.brief?.departDate),
-        data.brief?.passengers > 1 ? `${data.brief.passengers} travelers` : null,
+        data.brief?.passengerSummary || (data.brief?.passengers > 1 ? `${data.brief.passengers} travelers` : null),
       ].filter(Boolean).join(' · ');
 
       els.results.hidden = false;
@@ -743,6 +881,7 @@
       state.pendingQuery = query;
 
       const passengers = override.passengers || state.familySize || undefined;
+      const ages = override.ages || state.familyAges || undefined;
 
       els.status.textContent = '';
       els.btn.disabled = true;
@@ -751,6 +890,7 @@
       try {
         const body = { query, message: query };
         if (passengers) body.passengers = passengers;
+        if (ages?.length) body.ages = ages;
 
         const res = await fetch('/api/flights/search', {
           method: 'POST',
@@ -763,9 +903,6 @@
         state.result = data;
         if (['cheapest', 'shortest', 'best'].includes(data.brief?.preference)) {
           state.bucket = data.brief.preference;
-        }
-        if (data.brief?.passengers > 1 && !state.familySize && data.status === 'ok') {
-          // optional: don't auto-remember unless family was mentioned
         }
         render();
       } catch (err) {

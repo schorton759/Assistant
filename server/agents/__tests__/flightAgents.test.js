@@ -106,15 +106,29 @@ describe('SkyAgent flight agents', () => {
     expect(result.offerCount).toBe(0);
   });
 
-  test('remembered family size skips clarification', async () => {
+  test('remembered family size without ages asks for ages', async () => {
     delete process.env.NVIDIA_API_KEY;
     const result = await searchFlights({
       query: 'best flight from Bermuda to London for my family on August 16',
       passengers: 4,
     });
+    expect(result.status).toBe('needs_clarification');
+    expect(result.clarification.type).toBe('passenger_ages');
+    expect(result.clarification.passengerCount).toBe(4);
+  });
+
+  test('family with ages returns priced offers', async () => {
+    delete process.env.NVIDIA_API_KEY;
+    const result = await searchFlights({
+      query: 'best flight from Bermuda to London for my family on August 16',
+      passengers: 4,
+      ages: [40, 38, 10, 1],
+    });
     expect(result.status).toBe('ok');
     expect(result.brief.passengers).toBe(4);
-    expect(result.buckets.best[0].stopsLabel).toMatch(/Nonstop|stop in|stops via/);
+    expect(result.brief.passengerSummary).toMatch(/adult/);
+    expect(result.brief.travelers.map((t) => t.type)).toEqual(['adult', 'adult', 'child', 'infant']);
+    expect(result.buckets.best[0].ages).toEqual([40, 38, 10, 1]);
   });
 
   test('one-stop offers name the layover airport', () => {
