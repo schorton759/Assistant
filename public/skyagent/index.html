@@ -137,6 +137,36 @@
       padding-bottom: 0.45rem;
     }
 
+    .dates {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+      margin-top: 1.15rem;
+    }
+
+    .date-field label {
+      display: block;
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-bottom: 0.35rem;
+    }
+
+    .date-field input[type="date"] {
+      color-scheme: dark;
+      font-size: 1rem;
+      font-weight: 500;
+      padding: 0.55rem 0;
+      min-height: 2.5rem;
+    }
+
+    .date-field input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.85) sepia(0.4) saturate(2) hue-rotate(5deg);
+      cursor: pointer;
+      opacity: 0.85;
+    }
+
     .cta {
       margin-top: 1.35rem;
       width: 100%;
@@ -338,6 +368,17 @@
           <input id="destination" maxlength="3" value="LHR" aria-label="To airport" />
         </div>
 
+        <div class="dates">
+          <div class="date-field">
+            <label for="departDate">Depart</label>
+            <input id="departDate" type="date" aria-label="Departure date" />
+          </div>
+          <div class="date-field">
+            <label for="returnDate">Return <span style="opacity:.7;font-weight:400;letter-spacing:0">(optional)</span></label>
+            <input id="returnDate" type="date" aria-label="Return date" />
+          </div>
+        </div>
+
         <button class="cta" id="searchBtn" type="button">Ask the agents</button>
 
         <div class="prompts" id="prompts">
@@ -370,6 +411,8 @@
       query: document.getElementById('query'),
       origin: document.getElementById('origin'),
       destination: document.getElementById('destination'),
+      departDate: document.getElementById('departDate'),
+      returnDate: document.getElementById('returnDate'),
       btn: document.getElementById('searchBtn'),
       status: document.getElementById('status'),
       results: document.getElementById('results'),
@@ -377,14 +420,57 @@
 
     let state = { result: null, bucket: 'best' };
 
+    function isoDate(d = new Date()) {
+      return d.toISOString().slice(0, 10);
+    }
+
+    function addDays(baseIso, days) {
+      const d = new Date(`${baseIso}T12:00:00`);
+      d.setDate(d.getDate() + days);
+      return isoDate(d);
+    }
+
+    // Defaults: depart in 3 weeks, return optional blank for one-way
+    (function initDates() {
+      const today = isoDate();
+      const depart = addDays(today, 21);
+      els.departDate.min = today;
+      els.returnDate.min = today;
+      els.departDate.value = depart;
+      els.returnDate.value = '';
+    })();
+
+    els.departDate.addEventListener('change', () => {
+      if (els.departDate.value) {
+        els.returnDate.min = els.departDate.value;
+        if (els.returnDate.value && els.returnDate.value < els.departDate.value) {
+          els.returnDate.value = els.departDate.value;
+        }
+      }
+    });
+
+    function formatTripDate(iso) {
+      if (!iso) return '';
+      try {
+        return new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', {
+          weekday: 'short', month: 'short', day: 'numeric',
+        });
+      } catch {
+        return iso;
+      }
+    }
+
     function offerHtml(offer, featured) {
+      const tripDates = offer.returnDate
+        ? `${formatTripDate(offer.departDate)} → ${formatTripDate(offer.returnDate)}`
+        : formatTripDate(offer.departDate);
       return `
         <article class="offer ${featured ? 'featured' : ''}">
           <div class="offer-top">
             <div class="route">${offer.origin} → ${offer.destination}</div>
             <div class="price">${money(offer.price, offer.currency)}</div>
           </div>
-          <div class="meta">${offer.durationLabel} · ${offer.stopsLabel} · ${offer.airlines.join(', ')}</div>
+          <div class="meta">${tripDates ? tripDates + ' · ' : ''}${offer.durationLabel} · ${offer.stopsLabel} · ${offer.airlines.join(', ')}</div>
           <div class="soft">Comfort ${offer.comfortScore}${offer.baggageIncluded ? ' · bags included' : ' · bags extra'}</div>
         </article>
       `;
@@ -404,8 +490,12 @@
       void els.results.offsetWidth;
       els.results.classList.add('show');
 
+      const briefDates = data.brief?.returnDate
+        ? `${formatTripDate(data.brief.departDate)} → ${formatTripDate(data.brief.returnDate)}`
+        : formatTripDate(data.brief?.departDate);
+
       els.results.innerHTML = `
-        <p class="label">Concierge</p>
+        <p class="label">Concierge${briefDates ? ` · ${briefDates}` : ''}</p>
         <h2 class="concierge-title">${concierge.headline || 'Your AI travel desk recommends'}</h2>
         <p class="concierge-body">${concierge.summary || ''}</p>
         ${data.recommendation ? offerHtml(data.recommendation, true) : ''}
@@ -449,9 +539,22 @@
       const query = override?.query ?? els.query.value.trim();
       const origin = (override?.origin ?? els.origin.value).trim().toUpperCase();
       const destination = (override?.destination ?? els.destination.value).trim().toUpperCase();
+      const departDate = override?.departDate ?? els.departDate.value;
+      const returnDate = (override?.returnDate ?? els.returnDate.value) || null;
+
+      if (!departDate) {
+        els.status.textContent = 'Pick a departure date.';
+        return;
+      }
+      if (returnDate && returnDate < departDate) {
+        els.status.textContent = 'Return date must be on or after depart.';
+        return;
+      }
 
       els.origin.value = origin;
       els.destination.value = destination;
+      els.departDate.value = departDate;
+      if (override?.returnDate !== undefined) els.returnDate.value = override.returnDate || '';
       if (override?.query) els.query.value = override.query;
 
       els.status.textContent = '';
@@ -462,12 +565,21 @@
         const res = await fetch('/api/flights/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, origin, destination, preference: state.bucket }),
+          body: JSON.stringify({
+            query,
+            origin,
+            destination,
+            departDate,
+            returnDate: returnDate || null,
+            preference: state.bucket,
+          }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Search failed');
 
         state.result = data;
+        if (data.brief?.departDate) els.departDate.value = data.brief.departDate;
+        if (data.brief?.returnDate) els.returnDate.value = data.brief.returnDate;
         if (['cheapest', 'shortest', 'best'].includes(data.brief?.preference)) {
           state.bucket = data.brief.preference;
         }

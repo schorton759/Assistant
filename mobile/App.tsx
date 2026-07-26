@@ -84,9 +84,17 @@ export default function App() {
     DMSans_700Bold,
   });
 
+  const defaultDepart = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 21);
+    return d.toISOString().slice(0, 10);
+  })();
+
   const [query, setQuery] = useState('Find the best flight from JFK to London next month');
   const [origin, setOrigin] = useState('JFK');
   const [destination, setDestination] = useState('LHR');
+  const [departDate, setDepartDate] = useState(defaultDepart);
+  const [returnDate, setReturnDate] = useState('');
   const [bucket, setBucket] = useState<BucketKey>('best');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,9 +140,13 @@ export default function App() {
         query: q,
         origin,
         destination,
+        departDate,
+        returnDate: returnDate || undefined,
         preference: bucket,
       });
       setResult(data);
+      if (data.brief?.departDate) setDepartDate(data.brief.departDate);
+      if (data.brief?.returnDate) setReturnDate(data.brief.returnDate);
       if (data.brief?.preference && ['cheapest', 'shortest', 'best'].includes(data.brief.preference)) {
         setBucket(data.brief.preference as BucketKey);
       }
@@ -218,6 +230,33 @@ export default function App() {
                     placeholder="TO"
                     placeholderTextColor="rgba(232,241,245,0.4)"
                   />
+                </View>
+
+                <View style={styles.dateRow}>
+                  <View style={styles.dateField}>
+                    <Text style={styles.dateLabel}>Depart</Text>
+                    <TextInput
+                      value={departDate}
+                      onChangeText={setDepartDate}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor="rgba(232,241,245,0.4)"
+                      style={styles.dateInput}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                  <View style={styles.dateField}>
+                    <Text style={styles.dateLabel}>Return</Text>
+                    <TextInput
+                      value={returnDate}
+                      onChangeText={setReturnDate}
+                      placeholder="optional"
+                      placeholderTextColor="rgba(232,241,245,0.4)"
+                      style={styles.dateInput}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
                 </View>
 
                 <Animated.View style={{ transform: [{ scale: ctaPulse }] }}>
@@ -414,6 +453,28 @@ const styles = StyleSheet.create({
     color: colors.sunrise,
     fontFamily: 'Fraunces_600SemiBold',
     fontSize: 22,
+  },
+  dateRow: {
+    marginTop: 18,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  dateField: { flex: 1 },
+  dateLabel: {
+    fontFamily: 'DMSans_500Medium',
+    fontSize: 11,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: 'rgba(232,241,245,0.5)',
+    marginBottom: 4,
+  },
+  dateInput: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(232,241,245,0.28)',
+    color: colors.mist,
+    fontFamily: 'DMSans_500Medium',
+    fontSize: 16,
+    paddingVertical: 10,
   },
   cta: {
     marginTop: 22,

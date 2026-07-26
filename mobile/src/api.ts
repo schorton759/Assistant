@@ -77,7 +77,7 @@ export async function searchFlights(body: {
   origin?: string;
   destination?: string;
   departDate?: string;
-  returnDate?: string;
+  returnDate?: string | null;
   preference?: string;
   passengers?: number;
   cabin?: string;

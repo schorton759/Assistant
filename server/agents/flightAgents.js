@@ -118,14 +118,15 @@ Return JSON:
       maxTokens: 400,
     });
 
+    // Explicit form dates win over model guesses
     const brief = {
-      origin: normalizeAirport(data.origin) || fallback.origin,
-      destination: normalizeAirport(data.destination) || fallback.destination,
-      departDate: data.departDate || fallback.departDate,
-      returnDate: data.returnDate || fallback.returnDate,
-      passengers: Number(data.passengers) || fallback.passengers,
-      cabin: data.cabin || fallback.cabin,
-      preference: data.preference || fallback.preference,
+      origin: normalizeAirport(form?.origin) || normalizeAirport(data.origin) || fallback.origin,
+      destination: normalizeAirport(form?.destination) || normalizeAirport(data.destination) || fallback.destination,
+      departDate: form?.departDate || data.departDate || fallback.departDate,
+      returnDate: form?.returnDate || data.returnDate || fallback.returnDate,
+      passengers: Number(form?.passengers || data.passengers) || fallback.passengers,
+      cabin: form?.cabin || data.cabin || fallback.cabin,
+      preference: form?.preference || data.preference || fallback.preference,
       notes: data.notes || fallback.notes,
     };
 
