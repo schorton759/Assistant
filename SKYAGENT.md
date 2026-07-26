@@ -15,6 +15,8 @@ iPhone (Expo Go)  →  /api/flights/search  →  Agent desk
 
 Flight offers come from a deterministic catalog shaped like real multi-airline itineraries (nonstop, 1-stop, multi-stop, ULCC vs premium). Agents rank and explain; with `NVIDIA_API_KEY` they reason in natural language.
 
+Ask about a rental car and SkyAgent adds car options (or cars alone). Tap a result for details, then **Continue to book** — opens the airline/vendor (or Google Flights / Kayak / Skyscanner) with route, dates, and passenger mix prefilled. Airlines do not allow full checkout autofill without a partner API; deep links are the practical approach.
+
 ## Quick start
 
 ```bash
