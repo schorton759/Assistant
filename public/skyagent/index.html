@@ -447,6 +447,40 @@
       color: var(--sunrise);
     }
 
+    .book-list {
+      display: grid;
+      gap: 0.55rem;
+      margin: 1rem 0 0.4rem;
+    }
+    .book-btn {
+      display: block;
+      text-decoration: none;
+      border: 1px solid var(--line);
+      color: var(--mist);
+      padding: 0.85rem 0.9rem;
+      background: rgba(244, 180, 96, 0.06);
+    }
+    .book-btn.primary {
+      background: var(--sunrise);
+      color: #0b1f33;
+      border-color: transparent;
+      font-weight: 700;
+    }
+    .book-btn strong { display: block; font-size: 1rem; }
+    .book-btn span {
+      display: block;
+      margin-top: 0.2rem;
+      font-size: 0.78rem;
+      opacity: 0.85;
+      font-weight: 400;
+    }
+    .book-note {
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+      color: var(--faint);
+      line-height: 1.4;
+    }
+
     .agents { margin-top: 1.4rem; }
     .agent {
       padding: 0.8rem 0;
@@ -513,8 +547,8 @@
 
         <div class="prompts" id="prompts">
           <button class="prompt" type="button" data-q="Best flight from Bermuda to London for my family on August 16">Family · Bermuda → London</button>
-          <button class="prompt" type="button" data-q="Cheapest JFK to LHR leaving September 12, back September 20">Cheapest JFK → London</button>
-          <button class="prompt" type="button" data-q="Fastest SFO to Tokyo next month, two of us">Fastest SFO → Tokyo for 2</button>
+          <button class="prompt" type="button" data-q="Cheapest JFK to LHR leaving September 12, back September 20, and a rental car in London">Flight + rental car</button>
+          <button class="prompt" type="button" data-q="Rent an SUV at Heathrow from August 16 to August 23">Car rental · Heathrow</button>
         </div>
 
         <p class="family-chip" id="familyChip" hidden></p>
@@ -639,15 +673,48 @@
       }
     }
 
+    function flightPayload(data) {
+      if (!data) return null;
+      if (data.type === 'travel') return data.flights;
+      if (data.type === 'cars') return null;
+      return data;
+    }
+
+    function carPayload(data) {
+      if (!data) return null;
+      if (data.type === 'travel') return data.cars;
+      if (data.type === 'cars') return data;
+      return null;
+    }
+
     function offerById(id) {
       const data = state.result;
-      if (!data) return null;
-      if (data.recommendation?.id === id) return data.recommendation;
+      const flights = flightPayload(data);
+      const cars = carPayload(data);
+      if (flights?.recommendation?.id === id) return flights.recommendation;
+      if (cars?.recommendation?.id === id) return cars.recommendation;
       for (const key of ['cheapest', 'shortest', 'best']) {
-        const hit = (data.buckets?.[key] || []).find((o) => o.id === id);
+        const hit = (flights?.buckets?.[key] || []).find((o) => o.id === id);
         if (hit) return hit;
       }
+      const carHit = (cars?.offers || []).find((o) => o.id === id);
+      if (carHit) return carHit;
       return null;
+    }
+
+    function bookingButtons(links = []) {
+      if (!links.length) return '';
+      return `
+        <div class="book-list">
+          ${links.map((link) => `
+            <a class="book-btn ${link.primary ? 'primary' : ''}" href="${link.url}" target="_blank" rel="noopener noreferrer">
+              <strong>${link.label}</strong>
+              <span>${link.blurb || ''}</span>
+            </a>
+          `).join('')}
+        </div>
+        <p class="book-note">We prefill route, dates, and traveler mix where the site allows. Names, payment, and final seats are completed on their site — airlines don’t let apps finish checkout for you.</p>
+      `;
     }
 
     function offerHtml(offer, featured) {
@@ -671,14 +738,49 @@
             <div class="price">${money(offer.price, offer.currency)}</div>
           </div>
           <div class="meta">${tripDates ? tripDates + ' · ' : ''}${offer.durationLabel} · <span class="stops-emph">${offer.stopsLabel}</span> · ${offer.airlines.join(', ')}</div>
-          <div class="soft">Comfort ${offer.comfortScore}${offer.baggageIncluded ? ' · bags included' : ' · bags extra'}${pax} · tap for details</div>
+          <div class="soft">Comfort ${offer.comfortScore}${offer.baggageIncluded ? ' · bags included' : ' · bags extra'}${pax} · tap for details & booking</div>
+        </button>
+      `;
+    }
+
+    function carHtml(offer, featured) {
+      return `
+        <button type="button" class="offer ${featured ? 'featured' : ''}" data-offer-id="${offer.id}">
+          <div class="offer-top">
+            <div class="route">${offer.vendor} · ${offer.category}</div>
+            <div class="price">${money(offer.price, offer.currency)}</div>
+          </div>
+          <div class="meta">${offer.location} · ${formatTripDate(offer.pickupDate)} → ${formatTripDate(offer.dropoffDate)} · ${offer.days} day${offer.days > 1 ? 's' : ''}</div>
+          <div class="soft">${offer.example} · ${offer.seats} seats · ${offer.transmission} · ${money(offer.dailyPrice)}/day · tap to book</div>
         </button>
       `;
     }
 
     function openDetails(offer) {
       if (!offer) return;
-      const legs = (offer.segments || []).map((seg, i) => `
+
+      if (offer.type === 'car') {
+        els.sheetBody.innerHTML = `
+          <p class="label">Car details</p>
+          <h2 class="concierge-title" id="sheetTitle">${offer.vendor} · ${offer.category}</h2>
+          <p class="concierge-body">
+            ${money(offer.price, offer.currency)} total · ${money(offer.dailyPrice)}/day · ${offer.days} days
+          </p>
+          <div class="leg">
+            <div class="meta">${offer.example}</div>
+            <div class="soft">${offer.location}</div>
+            <div class="soft">${formatTripDate(offer.pickupDate)} → ${formatTripDate(offer.dropoffDate)}</div>
+            <div class="soft">${offer.seats} seats · ${offer.bags} bags · ${offer.transmission}${offer.unlimitedMileage ? ' · unlimited miles' : ''}</div>
+          </div>
+          <p class="label">Continue to book</p>
+          ${bookingButtons(offer.bookingLinks || [])}
+        `;
+        els.sheet.classList.add('open');
+        els.sheet.setAttribute('aria-hidden', 'false');
+        return;
+      }
+
+      const legs = (offer.segments || []).map((seg) => `
         ${seg.layoverLabel ? `<div class="layover">Layover in ${seg.origin} · ${seg.layoverLabel}</div>` : ''}
         <div class="leg">
           <div class="leg-top">
@@ -698,7 +800,8 @@
           · ${offer.durationLabel} · <span class="stops-emph">${offer.stopsLabel}</span>
         </p>
         ${legs}
-        <p class="footnote">${offer.baggageIncluded ? 'Bags included' : 'Bags may be extra'} · Comfort ${offer.comfortScore}${offer.refundable ? ' · refundable' : ''}</p>
+        <p class="label">Continue to book</p>
+        ${bookingButtons(offer.bookingLinks || [])}
       `;
       els.sheet.classList.add('open');
       els.sheet.setAttribute('aria-hidden', 'false');
@@ -798,6 +901,71 @@
       });
     }
 
+    function renderFlightsBlock(flights) {
+      if (!flights || flights.status === 'needs_clarification') return '';
+      const concierge = (flights.agents || []).find((a) => a.agent === 'Concierge') || {};
+      const offers = flights.buckets?.[state.bucket] || [];
+      const recId = flights.recommendation?.id;
+      const understood = [
+        flights.brief?.origin && flights.brief?.destination
+          ? `${flights.brief.origin} → ${flights.brief.destination}`
+          : null,
+        flights.brief?.returnDate
+          ? `${formatTripDate(flights.brief.departDate)} → ${formatTripDate(flights.brief.returnDate)}`
+          : formatTripDate(flights.brief?.departDate),
+        flights.brief?.passengerSummary || null,
+      ].filter(Boolean).join(' · ');
+
+      return `
+        <p class="label">Flights${understood ? ` · ${understood}` : ''}</p>
+        <h2 class="concierge-title">${concierge.headline || 'Your AI travel desk recommends'}</h2>
+        <p class="concierge-body">${concierge.summary || ''}</p>
+        ${flights.recommendation ? offerHtml(flights.recommendation, true) : ''}
+        <div class="tabs">
+          ${['cheapest', 'shortest', 'best'].map((key) => `
+            <button class="tab ${state.bucket === key ? 'active' : ''}" data-bucket="${key}" type="button">
+              ${key[0].toUpperCase()}${key.slice(1)}
+            </button>
+          `).join('')}
+        </div>
+        ${offers.map((o) => offerHtml(o, o.id === recId)).join('')}
+      `;
+    }
+
+    function renderCarsBlock(cars) {
+      if (!cars) return '';
+      const concierge = (cars.agents || []).find((a) => a.agent === 'CarConcierge') || {};
+      const understood = [
+        cars.brief?.location,
+        cars.brief?.pickupDate && cars.brief?.dropoffDate
+          ? `${formatTripDate(cars.brief.pickupDate)} → ${formatTripDate(cars.brief.dropoffDate)}`
+          : null,
+      ].filter(Boolean).join(' · ');
+
+      return `
+        <p class="label" style="margin-top:1.6rem">Cars${understood ? ` · ${understood}` : ''}</p>
+        <h2 class="concierge-title">${concierge.headline || 'Car desk recommendation'}</h2>
+        <p class="concierge-body">${concierge.summary || ''}</p>
+        ${cars.recommendation ? carHtml(cars.recommendation, true) : ''}
+        ${(cars.offers || []).map((o) => carHtml(o, o.id === cars.recommendation?.id)).join('')}
+      `;
+    }
+
+    function renderAgents(agents = []) {
+      if (!agents.length) return '';
+      return `
+        <div class="agents">
+          <p class="label">Agent desk</p>
+          ${agents.map((a) => `
+            <div class="agent">
+              <strong>${a.agent}<span> · ${a.model}</span></strong>
+              <p>${a.reasoning || a.summary || ''}</p>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
     function render() {
       const data = state.result;
       if (!data) return;
@@ -807,18 +975,12 @@
         return;
       }
 
-      const concierge = data.agents.find((a) => a.agent === 'Concierge') || {};
-      const offers = data.buckets[state.bucket] || [];
-      const recId = data.recommendation?.id;
-      const understood = [
-        data.brief?.origin && data.brief?.destination
-          ? `${data.brief.origin} → ${data.brief.destination}`
-          : null,
-        data.brief?.returnDate
-          ? `${formatTripDate(data.brief.departDate)} → ${formatTripDate(data.brief.returnDate)}`
-          : formatTripDate(data.brief?.departDate),
-        data.brief?.passengerSummary || (data.brief?.passengers > 1 ? `${data.brief.passengers} travelers` : null),
-      ].filter(Boolean).join(' · ');
+      const flights = flightPayload(data);
+      const cars = carPayload(data);
+      const agents = [
+        ...((flights && flights.agents) || data.agents || []),
+        ...((cars && cars.agents) || []),
+      ];
 
       els.results.hidden = false;
       els.results.classList.remove('show');
@@ -826,35 +988,13 @@
       els.results.classList.add('show');
 
       els.results.innerHTML = `
-        <p class="label">Understood${understood ? ` · ${understood}` : ''}</p>
-        <h2 class="concierge-title">${concierge.headline || 'Your AI travel desk recommends'}</h2>
-        <p class="concierge-body">${concierge.summary || ''}</p>
-        ${data.recommendation ? offerHtml(data.recommendation, true) : ''}
-
-        <div class="tabs">
-          ${['cheapest', 'shortest', 'best'].map((key) => `
-            <button class="tab ${state.bucket === key ? 'active' : ''}" data-bucket="${key}" type="button">
-              ${key[0].toUpperCase()}${key.slice(1)}
-            </button>
-          `).join('')}
-        </div>
-
-        ${offers.map((o) => offerHtml(o, o.id === recId)).join('')}
-
-        <div class="agents">
-          <p class="label">Agent desk</p>
-          ${data.agents.map((a) => `
-            <div class="agent">
-              <strong>${a.agent}<span> · ${a.model}</span></strong>
-              <p>${a.reasoning || a.summary || ''}</p>
-            </div>
-          `).join('')}
-        </div>
-
+        ${flights ? renderFlightsBlock(flights) : ''}
+        ${cars ? renderCarsBlock(cars) : ''}
+        ${renderAgents(agents)}
         <p class="footnote">
-          ${data.nvidiaEnabled
-            ? 'Powered by free NVIDIA NIM models.'
-            : 'Running on local ranking. Add NVIDIA_API_KEY for live NIM agents.'}
+          ${(flights || cars || data).nvidiaEnabled
+            ? 'Powered by free NVIDIA NIM models. Booking continues on airline / rental sites with your trip prefilled.'
+            : 'Local ranking mode. Booking links still open with your trip details.'}
         </p>
       `;
 
@@ -901,8 +1041,9 @@
         if (!res.ok) throw new Error(data.error || 'Search failed');
 
         state.result = data;
-        if (['cheapest', 'shortest', 'best'].includes(data.brief?.preference)) {
-          state.bucket = data.brief.preference;
+        const brief = data.brief || data.flights?.brief;
+        if (['cheapest', 'shortest', 'best'].includes(brief?.preference)) {
+          state.bucket = brief.preference;
         }
         render();
       } catch (err) {

@@ -12,6 +12,7 @@
 const logger = require('../utils/logger');
 const { MODELS, hasNvidiaKey, generateJson } = require('../services/aiService');
 const { generateOffers, normalizeAirport } = require('../services/flightCatalog');
+const { buildFlightBookingLinks } = require('../services/bookingLinks');
 
 function summarizeOffer(offer) {
   return {
@@ -541,7 +542,10 @@ async function searchFlights(input = {}) {
     cabin: brief.cabin,
     passengers: brief.passengers,
     ages,
-  });
+  }).map((o) => ({
+    ...o,
+    bookingLinks: buildFlightBookingLinks(o, brief),
+  }));
 
   const cheapestOffers = rankCheapest(offers);
   const shortestOffers = rankShortest(offers);
@@ -583,6 +587,7 @@ async function searchFlights(input = {}) {
 
   return {
     status: 'ok',
+    type: 'flights',
     brief,
     nvidiaEnabled: hasNvidiaKey(),
     recommendation,

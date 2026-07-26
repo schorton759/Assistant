@@ -129,6 +129,8 @@ describe('SkyAgent flight agents', () => {
     expect(result.brief.passengerSummary).toMatch(/adult/);
     expect(result.brief.travelers.map((t) => t.type)).toEqual(['adult', 'adult', 'child', 'infant']);
     expect(result.buckets.best[0].ages).toEqual([40, 38, 10, 1]);
+    expect(result.recommendation.bookingLinks?.length).toBeGreaterThan(0);
+    expect(result.recommendation.bookingLinks[0].url).toMatch(/^https:\/\//);
   });
 
   test('one-stop offers name the layover airport', () => {
@@ -142,5 +144,43 @@ describe('SkyAgent flight agents', () => {
     expect(oneStop.stopsLabel).toMatch(/^1 stop in [A-Z]{3}$/);
     expect(oneStop.stopAirports).toHaveLength(1);
     expect(oneStop.segments[1].layoverLabel).toBeTruthy();
+  });
+});
+
+describe('SkyAgent cars + booking links', () => {
+  const { searchCars, wantsCars, wantsFlights } = require('../carAgents');
+  const { buildFlightBookingLinks } = require('../../services/bookingLinks');
+
+  test('detects car vs flight intent', () => {
+    expect(wantsCars('rent a car at Heathrow')).toBe(true);
+    expect(wantsFlights('rent a car at Heathrow')).toBe(false);
+    expect(wantsCars('flight to London and a rental car')).toBe(true);
+    expect(wantsFlights('flight to London and a rental car')).toBe(true);
+  });
+
+  test('searchCars returns bookable offers', async () => {
+    delete process.env.NVIDIA_API_KEY;
+    const result = await searchCars({
+      query: 'SUV rental at LHR August 16 to August 23',
+      location: 'LHR',
+      pickupDate: '2026-08-16',
+      dropoffDate: '2026-08-23',
+    });
+    expect(result.type).toBe('cars');
+    expect(result.offers.length).toBeGreaterThan(0);
+    expect(result.recommendation.bookingLinks[0].url).toMatch(/^https:\/\//);
+  });
+
+  test('flight booking links include meta-search URLs', () => {
+    const links = buildFlightBookingLinks({
+      origin: 'BDA',
+      destination: 'LHR',
+      departDate: '2026-08-16',
+      airlines: ['British Airways'],
+      segments: [{ airline: 'BA', airlineName: 'British Airways' }],
+      ages: [40, 8],
+    });
+    expect(links.some((l) => l.id === 'google-flights')).toBe(true);
+    expect(links.some((l) => l.id === 'airline')).toBe(true);
   });
 });
