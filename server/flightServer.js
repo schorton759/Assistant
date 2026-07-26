@@ -33,7 +33,13 @@ app.get('/api', (_req, res) => {
     name: 'SkyAgent',
     message: 'AI travel desk API',
     ui: '/skyagent/',
-    endpoints: ['/api/flights/health', '/api/flights/search', '/api/flights/ask'],
+    endpoints: [
+      '/api/flights/health',
+      '/api/flights/search',
+      '/api/flights/ask',
+      '/api/flights/trips',
+      '/api/flights/trips/check-all',
+    ],
   });
 });
 

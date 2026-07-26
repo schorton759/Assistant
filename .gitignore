@@ -40,3 +40,7 @@ coverage
 # Other
 *.bak
 *.tmp
+
+# SkyAgent local trip-watch store
+data/
+data/**

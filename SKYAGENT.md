@@ -15,6 +15,8 @@ iPhone (Expo Go)  →  /api/flights/search  →  Agent desk
 
 **Live prices first.** SkyAgent queries Travelpayouts/Aviasales market caches (and Duffel when `DUFFEL_ACCESS_TOKEN` is set), dedupes, and ranks the cheapest real public fares. Amadeus Self-Service was shut down in July 2026, so it is not used. If a thin route has no live rows, SkyAgent falls back to a route-aware demo catalog and labels it clearly — never mixes fake catalog fares into a live “cheapest” list.
 
+**Saved trips + price watch.** After a search, tap **Watch this trip** — SkyAgent remembers the route, dates, and family ages, and alerts when the cheapest fare drops ~8% below what you saw (or your target). Watches re-check when you open the app.
+
 Ask about a rental car and SkyAgent adds car options (or cars alone). Tap a result for details, then **Continue to book** — opens the live market offer (when available) or the airline/vendor / Google Flights / Kayak / Skyscanner with route, dates, and passenger mix prefilled. Airlines do not allow full checkout autofill without a partner API; deep links are the practical approach.
 
 True unpublished consolidator/net fares still need an IATA/ARC agency contract — public meta-search is the honest ceiling without that.

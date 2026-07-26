@@ -403,7 +403,8 @@
       font-size: 0.8rem;
       color: var(--faint);
     }
-    .family-chip button {
+    .family-chip button,
+    .watch-actions button {
       border: none;
       background: none;
       color: var(--sunrise);
@@ -412,6 +413,54 @@
       cursor: pointer;
       padding: 0;
     }
+
+    .watch-panel {
+      margin-top: 1.1rem;
+      padding-top: 0.85rem;
+      border-top: 1px solid var(--line);
+    }
+    .watch-alert {
+      margin: 0 0 0.75rem;
+      padding: 0.55rem 0;
+      border-bottom: 1px solid rgba(244, 180, 96, 0.35);
+      color: var(--sunrise);
+      font-size: 0.9rem;
+      line-height: 1.35;
+    }
+    .watch-row {
+      padding: 0.65rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .watch-row .route {
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .watch-meta {
+      margin-top: 0.2rem;
+      font-size: 0.78rem;
+      color: var(--faint);
+    }
+    .watch-actions {
+      margin-top: 0.35rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.85rem;
+      font-size: 0.8rem;
+    }
+    .watch-hit .route { color: var(--sunrise); }
+
+    .watch-cta {
+      margin: 1rem 0 0.2rem;
+      width: 100%;
+      border: 1px solid rgba(244, 180, 96, 0.55);
+      background: transparent;
+      color: var(--sunrise);
+      font: inherit;
+      font-weight: 600;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+    }
+    .watch-cta:disabled { opacity: 0.55; cursor: default; }
 
     .sheet {
       position: fixed;
@@ -573,6 +622,7 @@
         </div>
 
         <p class="family-chip" id="familyChip" hidden></p>
+        <div class="watch-panel" id="watchPanel" hidden></div>
         <p class="status" id="status" aria-live="polite"></p>
       </section>
 
@@ -595,6 +645,16 @@
 
   <script>
     const FAMILY_KEY = 'skyagent.familyProfile';
+    const DEVICE_KEY = 'skyagent.deviceId';
+
+    function getDeviceId() {
+      let id = localStorage.getItem(DEVICE_KEY);
+      if (!id) {
+        id = `dev_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+        localStorage.setItem(DEVICE_KEY, id);
+      }
+      return id;
+    }
 
     const money = (n, c = 'USD') => {
       try {
@@ -626,6 +686,7 @@
       status: document.getElementById('status'),
       results: document.getElementById('results'),
       familyChip: document.getElementById('familyChip'),
+      watchPanel: document.getElementById('watchPanel'),
       sheet: document.getElementById('sheet'),
       sheetBody: document.getElementById('sheetBody'),
       sheetClose: document.getElementById('sheetClose'),
@@ -639,6 +700,9 @@
       pendingQuery: null,
       familySize: savedFamily.size,
       familyAges: savedFamily.ages,
+      watches: [],
+      alerts: [],
+      savingWatch: false,
     };
 
     function rememberFamily(size, ages) {
@@ -671,6 +735,174 @@
       els.familyChip.hidden = false;
       els.familyChip.innerHTML = `Remembered family: <strong>${state.familySize}</strong> (${summary}) · <button type="button" id="clearFamily">clear</button>`;
       document.getElementById('clearFamily')?.addEventListener('click', clearFamily);
+    }
+
+    function renderWatchPanel() {
+      const watches = state.watches || [];
+      const alerts = state.alerts || [];
+      if (!watches.length && !alerts.length) {
+        els.watchPanel.hidden = true;
+        els.watchPanel.innerHTML = '';
+        return;
+      }
+
+      els.watchPanel.hidden = false;
+      els.watchPanel.innerHTML = `
+        <p class="label">Saved trips</p>
+        ${alerts.map((a) => `<p class="watch-alert">${a.message}</p>`).join('')}
+        ${watches.map((w) => `
+          <div class="watch-row ${w.status === 'hit' ? 'watch-hit' : ''}">
+            <div class="route">${w.origin} → ${w.destination}${w.status === 'hit' ? ' · price hit' : ''}</div>
+            <div class="watch-meta">
+              ${formatTripDate(w.departDate)}${w.returnDate ? ` → ${formatTripDate(w.returnDate)}` : ''}
+              · ${w.passengers} travelers
+              · now ${money(w.lastPrice, w.currency)}
+              · alert ≤ ${money(w.targetPrice, w.currency)}
+              · saw ${money(w.baselinePrice, w.currency)}
+            </div>
+            <div class="watch-actions">
+              <button type="button" data-watch-search="${w.id}">Search again</button>
+              <button type="button" data-watch-check="${w.id}">Check price</button>
+              <button type="button" data-watch-delete="${w.id}">Remove</button>
+            </div>
+          </div>
+        `).join('')}
+      `;
+
+      els.watchPanel.querySelectorAll('[data-watch-search]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const w = state.watches.find((x) => x.id === btn.dataset.watchSearch);
+          if (!w) return;
+          const q = w.query || `Best flight from ${w.origin} to ${w.destination} on ${w.departDate}`
+            + (w.returnDate ? ` returning ${w.returnDate}` : '')
+            + ' for my family';
+          search({ query: q, passengers: w.passengers, ages: w.ages });
+        });
+      });
+      els.watchPanel.querySelectorAll('[data-watch-check]').forEach((btn) => {
+        btn.addEventListener('click', () => checkOneWatch(btn.dataset.watchCheck));
+      });
+      els.watchPanel.querySelectorAll('[data-watch-delete]').forEach((btn) => {
+        btn.addEventListener('click', () => removeWatch(btn.dataset.watchDelete));
+      });
+    }
+
+    async function refreshWatches({ check = false } = {}) {
+      const deviceId = getDeviceId();
+      try {
+        if (check) {
+          const res = await fetch('/api/flights/trips/check-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+            body: JSON.stringify({ deviceId }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            state.watches = (data.results || []).map((r) => r.watch).filter(Boolean);
+            state.alerts = data.alerts || [];
+            renderWatchPanel();
+            return;
+          }
+        }
+        const res = await fetch(`/api/flights/trips?deviceId=${encodeURIComponent(deviceId)}`, {
+          headers: { 'X-Device-Id': deviceId },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          state.watches = data.watches || [];
+          renderWatchPanel();
+        }
+      } catch {
+        /* offline / first boot */
+      }
+    }
+
+    async function checkOneWatch(id) {
+      els.status.textContent = 'Checking price…';
+      try {
+        const deviceId = getDeviceId();
+        const res = await fetch(`/api/flights/trips/${id}/check`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+          body: JSON.stringify({ deviceId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Check failed');
+        state.watches = state.watches.map((w) => (w.id === id ? data.watch : w));
+        if (data.alert) {
+          state.alerts = [data.alert, ...(state.alerts || [])].slice(0, 5);
+          els.status.textContent = data.alert.message;
+        } else {
+          els.status.textContent = `Still ${money(data.watch.lastPrice, data.watch.currency)} · alert at ${money(data.watch.targetPrice, data.watch.currency)}`;
+        }
+        renderWatchPanel();
+      } catch (err) {
+        els.status.textContent = err.message || 'Check failed';
+      }
+    }
+
+    async function removeWatch(id) {
+      const deviceId = getDeviceId();
+      try {
+        await fetch(`/api/flights/trips/${id}?deviceId=${encodeURIComponent(deviceId)}`, {
+          method: 'DELETE',
+          headers: { 'X-Device-Id': deviceId },
+        });
+        state.watches = state.watches.filter((w) => w.id !== id);
+        state.alerts = (state.alerts || []).filter((a) => !String(a.message || '').includes(id));
+        renderWatchPanel();
+        els.status.textContent = 'Watch removed.';
+      } catch (err) {
+        els.status.textContent = err.message || 'Could not remove watch';
+      }
+    }
+
+    async function saveCurrentTripWatch() {
+      const flights = flightPayload(state.result);
+      if (!flights?.brief?.origin || !flights?.brief?.destination) {
+        els.status.textContent = 'Search a flight trip first.';
+        return;
+      }
+      const cheapest = flights.buckets?.cheapest?.[0] || flights.recommendation;
+      if (!cheapest?.price) {
+        els.status.textContent = 'No price to watch yet.';
+        return;
+      }
+
+      const target = Math.max(1, Math.round(cheapest.price * 0.92));
+      state.savingWatch = true;
+      els.status.textContent = 'Saving trip watch…';
+      try {
+        const deviceId = getDeviceId();
+        const res = await fetch('/api/flights/trips', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+          body: JSON.stringify({
+            deviceId,
+            origin: flights.brief.origin,
+            destination: flights.brief.destination,
+            departDate: flights.brief.departDate,
+            returnDate: flights.brief.returnDate || null,
+            passengers: flights.brief.passengers,
+            ages: flights.brief.ages,
+            cabin: flights.brief.cabin || 'economy',
+            query: state.pendingQuery || els.query.value,
+            baselinePrice: cheapest.price,
+            targetPrice: target,
+            currency: cheapest.currency || 'USD',
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Could not save');
+        state.watches = [data.watch, ...state.watches.filter((w) => w.id !== data.watch.id)];
+        renderWatchPanel();
+        els.status.textContent = `Watching ${flights.brief.origin} → ${flights.brief.destination}. Alert at ${money(target)} (now ${money(cheapest.price)}).`;
+        render();
+      } catch (err) {
+        els.status.textContent = err.message || 'Could not save watch';
+      } finally {
+        state.savingWatch = false;
+      }
     }
 
     function formatTripDate(iso) {
@@ -966,6 +1198,9 @@
           `).join('')}
         </div>
         ${offers.map((o) => offerHtml(o, o.id === recId)).join('')}
+        <button type="button" class="watch-cta" id="saveWatchBtn">
+          Watch this trip · alert if under ${money(Math.max(1, Math.round((flights.buckets?.cheapest?.[0]?.price || flights.recommendation?.price || 0) * 0.92)), flights.buckets?.cheapest?.[0]?.currency || flights.recommendation?.currency)}
+        </button>
       `;
     }
 
@@ -1032,6 +1267,7 @@
           ${(flights || cars || data).nvidiaEnabled
             ? 'Powered by free NVIDIA NIM models. Booking continues on airline / rental sites with your trip prefilled.'
             : 'Local ranking mode. Booking links still open with your trip details.'}
+          Saved trips re-check market fares when you open SkyAgent.
         </p>
       `;
 
@@ -1045,6 +1281,8 @@
       els.results.querySelectorAll('[data-offer-id]').forEach((btn) => {
         btn.addEventListener('click', () => openDetails(offerById(btn.dataset.offerId)));
       });
+
+      document.getElementById('saveWatchBtn')?.addEventListener('click', saveCurrentTripWatch);
     }
 
     async function search(override = {}) {
@@ -1100,6 +1338,7 @@
     els.sheetClose.addEventListener('click', closeDetails);
     els.sheetBackdrop.addEventListener('click', closeDetails);
     renderFamilyChip();
+    refreshWatches({ check: true });
   </script>
 </body>
 </html>
