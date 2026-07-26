@@ -24,9 +24,75 @@ function summarizeOffer(offer) {
     airlines: offer.airlines,
     comfortScore: offer.comfortScore,
     baggageIncluded: offer.baggageIncluded,
-    path: offer.segments.map((s) => `${s.origin}→${s.destination}`).join(' · '),
+    path: offer.segments.map((s) => `${s.origin}→${s.destination} (${s.airlineName})`).join(' · '),
     departAt: offer.segments[0]?.departAt,
+    departDate: offer.departDate,
+    returnDate: offer.returnDate || null,
   };
+}
+
+const MONTHS = {
+  jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2,
+  apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6,
+  aug: 7, august: 7, sep: 8, sept: 8, september: 8,
+  oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11,
+};
+
+function isoFromParts(year, monthIndex, day) {
+  const d = new Date(Date.UTC(year, monthIndex, day));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+function upcomingDate(monthIndex, day, from = new Date()) {
+  const yearNow = from.getUTCFullYear();
+  let candidate = isoFromParts(yearNow, monthIndex, day);
+  const todayIso = from.toISOString().slice(0, 10);
+  if (candidate && candidate < todayIso) {
+    candidate = isoFromParts(yearNow + 1, monthIndex, day);
+  }
+  return candidate;
+}
+
+function parseDatesFromText(text, fallback = {}) {
+  let departDate = fallback.departDate || null;
+  let returnDate = fallback.returnDate || null;
+
+  const isoPairs = [...String(text).matchAll(/\b(20\d{2})-(\d{2})-(\d{2})\b/g)].map((m) => m[0]);
+  if (isoPairs[0]) departDate = isoPairs[0];
+  if (isoPairs[1]) returnDate = isoPairs[1];
+
+  const monthDay = [...String(text).matchAll(
+    /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(20\d{2}))?\b/gi
+  )];
+
+  if (monthDay.length) {
+    const parsed = monthDay.map((m) => {
+      const monthIndex = MONTHS[m[1].toLowerCase()];
+      const day = Number(m[2]);
+      const year = m[3] ? Number(m[3]) : null;
+      if (year) return isoFromParts(year, monthIndex, day);
+      return upcomingDate(monthIndex, day);
+    }).filter(Boolean);
+    if (parsed[0]) departDate = parsed[0];
+    if (parsed[1]) returnDate = parsed[1];
+  }
+
+  // "leaving Sept 12, back Sept 20" / "return September 20"
+  if (!returnDate) {
+    const back = String(text).match(
+      /\b(?:back|returning|return(?:ing)?)\s+(?:on\s+)?(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(20\d{2}))?\b/i
+    );
+    if (back) {
+      const monthIndex = MONTHS[back[1].toLowerCase()];
+      const day = Number(back[2]);
+      returnDate = back[3]
+        ? isoFromParts(Number(back[3]), monthIndex, day)
+        : upcomingDate(monthIndex, day);
+    }
+  }
+
+  return { departDate, returnDate };
 }
 
 function localIntentParse(message, fallback = {}) {
@@ -35,24 +101,31 @@ function localIntentParse(message, fallback = {}) {
   const airportMatches = upper.match(/\b[A-Z]{3}\b/g) || [];
   const known = new Set([
     'JFK', 'EWR', 'LGA', 'LAX', 'SFO', 'SEA', 'ORD', 'ATL', 'MIA', 'BOS',
-    'LHR', 'CDG', 'FRA', 'AMS', 'DXB', 'NRT', 'HND', 'ICN', 'SIN', 'SYD', 'BKK',
+    'LHR', 'LGW', 'CDG', 'FRA', 'AMS', 'DXB', 'DOH', 'NRT', 'HND', 'ICN',
+    'SIN', 'SYD', 'BKK', 'BDA', 'YYZ', 'PHL', 'CLT',
   ]);
   const codes = airportMatches.filter((c) => known.has(c));
 
   let origin = fallback.origin || codes[0] || null;
   let destination = fallback.destination || codes[1] || null;
 
-  const fromTo = text.match(/from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\.|on|next|under)/i);
+  const fromTo = text.match(/from\s+([A-Za-z\s]+?)\s+to\s+([A-Za-z\s]+?)(?:\s|$|,|\.|on|next|under|leaving|august|september|october)/i);
   if (fromTo) {
     origin = normalizeAirport(fromTo[1]) || origin;
     destination = normalizeAirport(fromTo[2]) || destination;
   }
 
-  const toFrom = text.match(/to\s+([A-Za-z\s]+?)\s+from\s+([A-Za-z\s]+?)(?:\s|$|,|\.|on|next|under)/i);
+  const toFrom = text.match(/to\s+([A-Za-z\s]+?)\s+from\s+([A-Za-z\s]+?)(?:\s|$|,|\.|on|next|under|leaving)/i);
   if (toFrom) {
     destination = normalizeAirport(toFrom[1]) || destination;
     origin = normalizeAirport(toFrom[2]) || origin;
   }
+
+  // City names without from/to
+  if (!origin && /bermuda/i.test(text)) origin = 'BDA';
+  if (!destination && /\blondon\b/i.test(text)) destination = 'LHR';
+  if (!destination && /\bparis\b/i.test(text)) destination = 'CDG';
+  if (!destination && /\btokyo\b/i.test(text)) destination = 'NRT';
 
   const preference = /cheap|budget|lowest|affordable/i.test(text)
     ? 'cheapest'
@@ -63,14 +136,25 @@ function localIntentParse(message, fallback = {}) {
         : fallback.preference || 'best';
 
   const today = new Date();
+  const parsedDates = parseDatesFromText(text, fallback);
   const defaultDepart = new Date(today.getTime() + 21 * 86400000);
-  const departDate =
-    fallback.departDate ||
-    defaultDepart.toISOString().slice(0, 10);
+  let departDate = parsedDates.departDate || fallback.departDate || defaultDepart.toISOString().slice(0, 10);
+  let returnDate = parsedDates.returnDate || fallback.returnDate || null;
 
-  let returnDate = fallback.returnDate || null;
-  if (/round\s*trip|return|weekend/i.test(text) && !returnDate) {
-    const ret = new Date(defaultDepart.getTime() + 7 * 86400000);
+  // Never use past years from models/text without an explicit year far in the past
+  if (departDate && departDate < today.toISOString().slice(0, 10)) {
+    const [, mm, dd] = departDate.split('-').map(Number);
+    departDate = upcomingDate(mm - 1, dd, today) || departDate;
+  }
+  if (returnDate && departDate && returnDate < departDate) {
+    const [, mm, dd] = returnDate.split('-').map(Number);
+    const after = upcomingDate(mm - 1, dd, new Date(`${departDate}T12:00:00Z`));
+    returnDate = after && after >= departDate ? after : returnDate;
+  }
+
+  if (/round\s*trip|returning|return|weekend|back\b/i.test(text) && !returnDate) {
+    const ret = new Date(`${departDate}T12:00:00Z`);
+    ret.setUTCDate(ret.getUTCDate() + 7);
     returnDate = ret.toISOString().slice(0, 10);
   }
 
@@ -101,7 +185,7 @@ async function runIntentAgent({ message, form }) {
     const { data, model } = await generateJson({
       model: MODELS.intent,
       system:
-        'You are IntentAgent for SkyAgent, a 21st-century travel AI. Extract flight search intent. Use IATA airport codes when possible.',
+        `You are IntentAgent for SkyAgent, a 21st-century travel AI. Extract flight search intent. Use IATA airport codes when possible. Today is ${new Date().toISOString().slice(0, 10)}. If the user gives a month/day without a year, use the next upcoming date in ${new Date().getUTCFullYear()} or ${new Date().getUTCFullYear() + 1} — never a past year.`,
       user: `User message: ${message}
 Known form fields (may be empty): ${JSON.stringify(form || {})}
 Return JSON:
@@ -118,17 +202,28 @@ Return JSON:
       maxTokens: 400,
     });
 
-    // Explicit form dates win over model guesses
+    const mergedDates = parseDatesFromText(message, {
+      departDate: form?.departDate || data.departDate,
+      returnDate: form?.returnDate || data.returnDate,
+    });
+
     const brief = {
       origin: normalizeAirport(form?.origin) || normalizeAirport(data.origin) || fallback.origin,
       destination: normalizeAirport(form?.destination) || normalizeAirport(data.destination) || fallback.destination,
-      departDate: form?.departDate || data.departDate || fallback.departDate,
-      returnDate: form?.returnDate || data.returnDate || fallback.returnDate,
+      departDate: form?.departDate || mergedDates.departDate || data.departDate || fallback.departDate,
+      returnDate: form?.returnDate || mergedDates.returnDate || data.returnDate || fallback.returnDate,
       passengers: Number(form?.passengers || data.passengers) || fallback.passengers,
       cabin: form?.cabin || data.cabin || fallback.cabin,
       preference: form?.preference || data.preference || fallback.preference,
       notes: data.notes || fallback.notes,
     };
+
+    // Clamp past years from the model
+    const todayIso = new Date().toISOString().slice(0, 10);
+    if (brief.departDate && brief.departDate < todayIso) {
+      const [, mm, dd] = brief.departDate.split('-').map(Number);
+      brief.departDate = upcomingDate(mm - 1, dd) || fallback.departDate;
+    }
 
     return {
       agent: 'IntentAgent',
@@ -275,7 +370,7 @@ async function runConciergeAgent({ brief, cheapest, shortest, best, agents }) {
     const { data, model } = await generateJson({
       model: MODELS.concierge,
       system:
-        'You are Concierge, the lead AI travel agent for SkyAgent. Speak like a sharp 21st-century travel advisor—warm, decisive, no fluff.',
+        'You are Concierge, the lead AI travel agent for SkyAgent. Speak like a sharp 21st-century travel advisor—warm, decisive, no fluff. ONLY cite airlines and routings that appear in the candidate offers. Never invent nonstop service that is not in the offer path (e.g. do not claim Qatar flies Bermuda–London nonstop).',
       user: `Trip brief: ${JSON.stringify(brief)}
 Specialist outputs: ${JSON.stringify(
         agents.map((a) => ({ agent: a.agent, reasoning: a.reasoning, top: a.picks?.[0]?.id })),

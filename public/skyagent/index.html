@@ -101,12 +101,17 @@
       -webkit-appearance: none;
     }
 
+    .codes,
+    .dates,
+    .date-field,
+    .arrow { display: none; }
+
     textarea {
-      min-height: 5.5rem;
+      min-height: 7rem;
       resize: none;
-      font-size: 1.1rem;
-      line-height: 1.45;
-      padding: 0.6rem 0;
+      font-size: 1.15rem;
+      line-height: 1.5;
+      padding: 0.75rem 0;
     }
 
     textarea::placeholder, input::placeholder {
@@ -355,36 +360,19 @@
       <header class="hero">
         <h1 class="brand">SkyAgent</h1>
         <p class="headline">Your AI travel desk</p>
-        <p class="subhead">Ask in plain English. Agents hunt cheapest, shortest, and best routes.</p>
+        <p class="subhead">Say where, when, and what matters — cheapest, fastest, or best.</p>
       </header>
 
       <section class="ask">
         <label class="label" for="query">Ask</label>
-        <textarea id="query" placeholder="Weekend in Tokyo from SFO, keep it under pain…">Find the best flight from JFK to London next month</textarea>
-
-        <div class="codes">
-          <input id="origin" maxlength="3" value="JFK" aria-label="From airport" />
-          <div class="arrow" aria-hidden="true">→</div>
-          <input id="destination" maxlength="3" value="LHR" aria-label="To airport" />
-        </div>
-
-        <div class="dates">
-          <div class="date-field">
-            <label for="departDate">Depart</label>
-            <input id="departDate" type="date" aria-label="Departure date" />
-          </div>
-          <div class="date-field">
-            <label for="returnDate">Return <span style="opacity:.7;font-weight:400;letter-spacing:0">(optional)</span></label>
-            <input id="returnDate" type="date" aria-label="Return date" />
-          </div>
-        </div>
+        <textarea id="query" placeholder="Cheapest round trip JFK to London leaving Sept 12, back Sept 20…">Find me the best flight from JFK to London leaving September 12 and returning September 20</textarea>
 
         <button class="cta" id="searchBtn" type="button">Ask the agents</button>
 
         <div class="prompts" id="prompts">
-          <button class="prompt" type="button" data-q="Cheapest JFK to LHR next month" data-o="JFK" data-d="LHR">Cheapest JFK → LHR</button>
-          <button class="prompt" type="button" data-q="Fastest SFO to Tokyo" data-o="SFO" data-d="NRT">Fastest SFO → Tokyo</button>
-          <button class="prompt" type="button" data-q="Best LAX to Paris" data-o="LAX" data-d="CDG">Best LAX → Paris</button>
+          <button class="prompt" type="button" data-q="Cheapest JFK to LHR leaving September 12, back September 20">Cheapest JFK → London Sept 12–20</button>
+          <button class="prompt" type="button" data-q="Fastest SFO to Tokyo next Friday, return the following Sunday">Fastest SFO → Tokyo next weekend</button>
+          <button class="prompt" type="button" data-q="Best LAX to Paris leaving August 15 one way">Best LAX → Paris Aug 15</button>
         </div>
 
         <p class="status" id="status" aria-live="polite"></p>
@@ -409,45 +397,12 @@
 
     const els = {
       query: document.getElementById('query'),
-      origin: document.getElementById('origin'),
-      destination: document.getElementById('destination'),
-      departDate: document.getElementById('departDate'),
-      returnDate: document.getElementById('returnDate'),
       btn: document.getElementById('searchBtn'),
       status: document.getElementById('status'),
       results: document.getElementById('results'),
     };
 
     let state = { result: null, bucket: 'best' };
-
-    function isoDate(d = new Date()) {
-      return d.toISOString().slice(0, 10);
-    }
-
-    function addDays(baseIso, days) {
-      const d = new Date(`${baseIso}T12:00:00`);
-      d.setDate(d.getDate() + days);
-      return isoDate(d);
-    }
-
-    // Defaults: depart in 3 weeks, return optional blank for one-way
-    (function initDates() {
-      const today = isoDate();
-      const depart = addDays(today, 21);
-      els.departDate.min = today;
-      els.returnDate.min = today;
-      els.departDate.value = depart;
-      els.returnDate.value = '';
-    })();
-
-    els.departDate.addEventListener('change', () => {
-      if (els.departDate.value) {
-        els.returnDate.min = els.departDate.value;
-        if (els.returnDate.value && els.returnDate.value < els.departDate.value) {
-          els.returnDate.value = els.departDate.value;
-        }
-      }
-    });
 
     function formatTripDate(iso) {
       if (!iso) return '';
@@ -483,19 +438,22 @@
       const concierge = data.agents.find((a) => a.agent === 'Concierge') || {};
       const offers = data.buckets[state.bucket] || [];
       const recId = data.recommendation?.id;
+      const understood = [
+        data.brief?.origin && data.brief?.destination
+          ? `${data.brief.origin} → ${data.brief.destination}`
+          : null,
+        data.brief?.returnDate
+          ? `${formatTripDate(data.brief.departDate)} → ${formatTripDate(data.brief.returnDate)}`
+          : formatTripDate(data.brief?.departDate),
+      ].filter(Boolean).join(' · ');
 
       els.results.hidden = false;
       els.results.classList.remove('show');
-      // restart animation
       void els.results.offsetWidth;
       els.results.classList.add('show');
 
-      const briefDates = data.brief?.returnDate
-        ? `${formatTripDate(data.brief.departDate)} → ${formatTripDate(data.brief.returnDate)}`
-        : formatTripDate(data.brief?.departDate);
-
       els.results.innerHTML = `
-        <p class="label">Concierge${briefDates ? ` · ${briefDates}` : ''}</p>
+        <p class="label">Understood${understood ? ` · ${understood}` : ''}</p>
         <h2 class="concierge-title">${concierge.headline || 'Your AI travel desk recommends'}</h2>
         <p class="concierge-body">${concierge.summary || ''}</p>
         ${data.recommendation ? offerHtml(data.recommendation, true) : ''}
@@ -536,25 +494,12 @@
     }
 
     async function search(override) {
-      const query = override?.query ?? els.query.value.trim();
-      const origin = (override?.origin ?? els.origin.value).trim().toUpperCase();
-      const destination = (override?.destination ?? els.destination.value).trim().toUpperCase();
-      const departDate = override?.departDate ?? els.departDate.value;
-      const returnDate = (override?.returnDate ?? els.returnDate.value) || null;
-
-      if (!departDate) {
-        els.status.textContent = 'Pick a departure date.';
-        return;
-      }
-      if (returnDate && returnDate < departDate) {
-        els.status.textContent = 'Return date must be on or after depart.';
+      const query = (override?.query ?? els.query.value).trim();
+      if (!query) {
+        els.status.textContent = 'Tell me where and when you want to fly.';
         return;
       }
 
-      els.origin.value = origin;
-      els.destination.value = destination;
-      els.departDate.value = departDate;
-      if (override?.returnDate !== undefined) els.returnDate.value = override.returnDate || '';
       if (override?.query) els.query.value = override.query;
 
       els.status.textContent = '';
@@ -565,21 +510,12 @@
         const res = await fetch('/api/flights/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query,
-            origin,
-            destination,
-            departDate,
-            returnDate: returnDate || null,
-            preference: state.bucket,
-          }),
+          body: JSON.stringify({ query, message: query }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Search failed');
 
         state.result = data;
-        if (data.brief?.departDate) els.departDate.value = data.brief.departDate;
-        if (data.brief?.returnDate) els.returnDate.value = data.brief.returnDate;
         if (['cheapest', 'shortest', 'best'].includes(data.brief?.preference)) {
           state.bucket = data.brief.preference;
         }
@@ -596,13 +532,7 @@
     document.getElementById('prompts').addEventListener('click', (e) => {
       const btn = e.target.closest('.prompt');
       if (!btn) return;
-      search({ query: btn.dataset.q, origin: btn.dataset.o, destination: btn.dataset.d });
-    });
-
-    ['origin', 'destination'].forEach((id) => {
-      els[id].addEventListener('input', () => {
-        els[id].value = els[id].value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
-      });
+      search({ query: btn.dataset.q });
     });
   </script>
 </body>

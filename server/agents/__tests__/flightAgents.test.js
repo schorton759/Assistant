@@ -66,4 +66,33 @@ describe('SkyAgent flight agents', () => {
       ])
     );
   });
+
+  test('Bermuda to London never invents Gulf/Asia nonstops', () => {
+    const offers = generateOffers({
+      origin: 'BDA',
+      destination: 'LHR',
+      departDate: '2026-08-16',
+    });
+    expect(offers.length).toBeGreaterThan(0);
+    for (const offer of offers) {
+      if (offer.stops === 0) {
+        expect(offer.airlines).toEqual(['British Airways']);
+        expect(offer.segments[0].origin).toBe('BDA');
+        expect(offer.segments[0].destination).toBe('LHR');
+      }
+      expect(offer.segments.every((s) => !['DOH', 'DXB', 'SIN', 'NRT'].includes(s.origin))).toBe(true);
+      expect(offer.segments.every((s) => !['DOH', 'DXB', 'SIN', 'NRT'].includes(s.destination))).toBe(true);
+      if (offer.stops === 0) {
+        expect(['Qatar Airways', 'Emirates', 'Frontier', 'Spirit', 'Japan Airlines']).not.toContain(offer.airlines[0]);
+      }
+    }
+  });
+
+  test('localIntentParse reads month names into upcoming dates', () => {
+    const brief = localIntentParse('best flight from Bermuda to London August 16');
+    expect(brief.origin).toBe('BDA');
+    expect(brief.destination).toBe('LHR');
+    expect(brief.departDate >= new Date().toISOString().slice(0, 10)).toBe(true);
+    expect(brief.departDate.slice(5)).toBe('08-16');
+  });
 });
