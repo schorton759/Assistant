@@ -13,6 +13,7 @@ const logger = require('../utils/logger');
 const { MODELS, hasNvidiaKey, generateJson } = require('../services/aiService');
 const { generateOffers, normalizeAirport } = require('../services/flightCatalog');
 const { buildFlightBookingLinks } = require('../services/bookingLinks');
+const { searchLiveOffers } = require('../services/liveFares');
 
 function summarizeOffer(offer) {
   return {
@@ -534,7 +535,7 @@ async function searchFlights(input = {}) {
   brief.travelers = travelers;
   brief.passengerSummary = summarizeTravelers(travelers);
 
-  const offers = generateOffers({
+  const live = await searchLiveOffers({
     origin: brief.origin,
     destination: brief.destination,
     departDate: brief.departDate,
@@ -542,7 +543,41 @@ async function searchFlights(input = {}) {
     cabin: brief.cabin,
     passengers: brief.passengers,
     ages,
-  }).map((o) => ({
+  });
+
+  let offers;
+  let pricing;
+  if (live.live && live.offers.length) {
+    // Prefer real market fares so "cheapest" means market-cheapest, not catalog fantasy.
+    offers = live.offers;
+    pricing = {
+      mode: 'live',
+      providers: live.providers,
+      note: 'Prices from live market aggregators (Travelpayouts/Aviasales'
+        + (live.providers.includes('duffel') ? ' + Duffel' : '')
+        + '). Cached fares can lag — confirm on the booking site.',
+    };
+  } else {
+    offers = generateOffers({
+      origin: brief.origin,
+      destination: brief.destination,
+      departDate: brief.departDate,
+      returnDate: brief.returnDate,
+      cabin: brief.cabin,
+      passengers: brief.passengers,
+      ages,
+    });
+    pricing = {
+      mode: 'catalog',
+      providers: [],
+      note: live.disabled
+        ? 'Demo catalog prices (live fares disabled). Set TRAVELPAYOUTS_TOKEN or LIVE_FARES=1.'
+        : 'No live market rows for this route/date yet — showing route-aware demo catalog. Try nearby dates or a major city pair.',
+      errors: live.errors || [],
+    };
+  }
+
+  offers = offers.map((o) => ({
     ...o,
     bookingLinks: buildFlightBookingLinks(o, brief),
   }));
@@ -590,6 +625,7 @@ async function searchFlights(input = {}) {
     type: 'flights',
     brief,
     nvidiaEnabled: hasNvidiaKey(),
+    pricing,
     recommendation,
     buckets: {
       cheapest: cheapestOffers,

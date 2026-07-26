@@ -138,7 +138,7 @@ function buildFlightBookingLinks(offer, brief = {}) {
       label: 'Google Flights',
       blurb: 'Compare with your dates & travelers filled in',
       url: googleFlightsUrl(payload),
-      primary: !airlineUrl,
+      primary: !airlineUrl && !offer.deepLink,
     },
     {
       id: 'kayak',
@@ -162,8 +162,20 @@ function buildFlightBookingLinks(offer, brief = {}) {
       label: `Book on ${airlineName}`,
       blurb: 'Opens the airline with route & dates started — finish passenger details there',
       url: airlineUrl,
+      primary: !offer.deepLink,
+    });
+  }
+
+  // Live aggregator deeplink (Travelpayouts / Aviasales) — often the actual quoted fare
+  if (offer.deepLink) {
+    links.unshift({
+      id: 'live-market',
+      label: offer.gate ? `Book via ${offer.gate}` : 'Book this live fare',
+      blurb: 'Opens the market offer that produced this price — confirm before paying',
+      url: offer.deepLink,
       primary: true,
     });
+    for (const link of links.slice(1)) link.primary = false;
   }
 
   return links;

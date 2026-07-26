@@ -13,9 +13,11 @@ iPhone (Expo Go)  →  /api/flights/search  →  Agent desk
                                               └─ Concierge        (nemotron-super-49b)
 ```
 
-Flight offers come from a deterministic catalog shaped like real multi-airline itineraries (nonstop, 1-stop, multi-stop, ULCC vs premium). Agents rank and explain; with `NVIDIA_API_KEY` they reason in natural language.
+**Live prices first.** SkyAgent queries Travelpayouts/Aviasales market caches (and Duffel when `DUFFEL_ACCESS_TOKEN` is set), dedupes, and ranks the cheapest real public fares. Amadeus Self-Service was shut down in July 2026, so it is not used. If a thin route has no live rows, SkyAgent falls back to a route-aware demo catalog and labels it clearly — never mixes fake catalog fares into a live “cheapest” list.
 
-Ask about a rental car and SkyAgent adds car options (or cars alone). Tap a result for details, then **Continue to book** — opens the airline/vendor (or Google Flights / Kayak / Skyscanner) with route, dates, and passenger mix prefilled. Airlines do not allow full checkout autofill without a partner API; deep links are the practical approach.
+Ask about a rental car and SkyAgent adds car options (or cars alone). Tap a result for details, then **Continue to book** — opens the live market offer (when available) or the airline/vendor / Google Flights / Kayak / Skyscanner with route, dates, and passenger mix prefilled. Airlines do not allow full checkout autofill without a partner API; deep links are the practical approach.
+
+True unpublished consolidator/net fares still need an IATA/ARC agency contract — public meta-search is the honest ceiling without that.
 
 ## Quick start
 

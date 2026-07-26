@@ -183,4 +183,32 @@ describe('SkyAgent cars + booking links', () => {
     expect(links.some((l) => l.id === 'google-flights')).toBe(true);
     expect(links.some((l) => l.id === 'airline')).toBe(true);
   });
+
+  test('live deepLink becomes the primary booking button', () => {
+    const links = buildFlightBookingLinks({
+      origin: 'JFK',
+      destination: 'LGW',
+      departDate: '2026-08-20',
+      airlines: ['British Airways'],
+      segments: [{ airline: 'BA', airlineName: 'British Airways' }],
+      deepLink: 'https://www.aviasales.com/search/demo',
+      gate: 'Kiwi.com',
+      ages: [30],
+    });
+    expect(links[0].id).toBe('live-market');
+    expect(links[0].primary).toBe(true);
+    expect(links[0].label).toMatch(/Kiwi/);
+  });
+
+  test('searchFlights reports catalog pricing mode in tests', async () => {
+    delete process.env.NVIDIA_API_KEY;
+    process.env.LIVE_FARES = '0';
+    const result = await searchFlights({
+      origin: 'JFK',
+      destination: 'LHR',
+      departDate: '2026-08-20',
+    });
+    expect(result.pricing.mode).toBe('catalog');
+    expect(result.buckets.cheapest.length).toBeGreaterThan(0);
+  });
 });

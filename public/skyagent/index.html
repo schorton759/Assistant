@@ -319,6 +319,27 @@
     .soft { color: var(--faint); font-size: 0.8rem; }
     .stops-emph { color: var(--sunrise); font-weight: 500; }
 
+    .live-pill {
+      display: inline-block;
+      margin: 0.35rem 0 0.15rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--mist);
+      border: 1px solid rgba(244, 180, 96, 0.45);
+      padding: 0.15rem 0.45rem;
+    }
+    .live-pill.demo {
+      border-color: rgba(232, 228, 220, 0.2);
+      color: var(--faint);
+    }
+    .pricing-note {
+      margin: 0.35rem 0 0.85rem;
+      font-size: 0.82rem;
+      color: var(--faint);
+      line-height: 1.35;
+    }
+
     .clarify {
       margin-top: 1.2rem;
       padding-top: 0.4rem;
@@ -731,12 +752,16 @@
         if (parts.length) paxBits.push(parts.join(', '));
       }
       const pax = paxBits.length ? ` · ${paxBits.join(' · ')}` : '';
+      const liveMark = offer.live
+        ? '<span class="live-pill">Live market</span>'
+        : '';
       return `
         <button type="button" class="offer ${featured ? 'featured' : ''}" data-offer-id="${offer.id}">
           <div class="offer-top">
             <div class="route">${offer.origin} → ${offer.destination}</div>
             <div class="price">${money(offer.price, offer.currency)}</div>
           </div>
+          ${liveMark}
           <div class="meta">${tripDates ? tripDates + ' · ' : ''}${offer.durationLabel} · <span class="stops-emph">${offer.stopsLabel}</span> · ${offer.airlines.join(', ')}</div>
           <div class="soft">Comfort ${offer.comfortScore}${offer.baggageIncluded ? ' · bags included' : ' · bags extra'}${pax} · tap for details & booking</div>
         </button>
@@ -799,6 +824,8 @@
           ${money(offer.price, offer.currency)}${offer.passengers > 1 ? ` total for ${offer.passengers}` : ''}
           · ${offer.durationLabel} · <span class="stops-emph">${offer.stopsLabel}</span>
         </p>
+        ${offer.live ? '<span class="live-pill">Live market fare</span>' : '<span class="live-pill demo">Demo catalog</span>'}
+        ${offer.pricingNote ? `<p class="pricing-note">${offer.pricingNote}</p>` : ''}
         ${legs}
         <p class="label">Continue to book</p>
         ${bookingButtons(offer.bookingLinks || [])}
@@ -916,8 +943,18 @@
         flights.brief?.passengerSummary || null,
       ].filter(Boolean).join(' · ');
 
+      const live = flights.pricing?.mode === 'live';
+      const pricingPill = live
+        ? '<span class="live-pill">Live market prices</span>'
+        : '<span class="live-pill demo">Demo catalog</span>';
+      const pricingNote = flights.pricing?.note
+        ? `<p class="pricing-note">${flights.pricing.note}</p>`
+        : '';
+
       return `
         <p class="label">Flights${understood ? ` · ${understood}` : ''}</p>
+        ${pricingPill}
+        ${pricingNote}
         <h2 class="concierge-title">${concierge.headline || 'Your AI travel desk recommends'}</h2>
         <p class="concierge-body">${concierge.summary || ''}</p>
         ${flights.recommendation ? offerHtml(flights.recommendation, true) : ''}
